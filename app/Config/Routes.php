@@ -55,6 +55,15 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
         $routes->post('supplier-orders/(:num)', 'OrderController::updateSupplierOrder/$1');
     });
 
+    $routes->get('sync', 'SyncController::index');
+    $routes->group('sync', ['filter' => 'marketplacethrottle'], static function (RouteCollection $routes): void {
+        $routes->post('tasks/(:segment)/run', 'SyncController::runTask/$1');
+        $routes->post('jobs/(:num)/retry', 'SyncController::retry/$1');
+        $routes->post('jobs/(:num)/cancel', 'SyncController::cancel/$1');
+        $routes->post('jobs/retry-failed', 'SyncController::retryFailed', ['filter' => 'role:admin']);
+        $routes->post('jobs/cancel-pending', 'SyncController::cancelPending', ['filter' => 'role:admin']);
+    });
+
     $routes->get('pricing', 'PricingController::index');
     $routes->get('pricing/simulate', 'PricingController::simulate');
 

@@ -105,6 +105,8 @@
                                 <a href="<?= site_url('suppliers/' . (int) $row['integration_id']) ?>">Fornecedor #<?= (int) $row['integration_id'] ?></a>
                             <?php elseif ($row['integration_type'] === 'mercadolivre'): ?>
                                 <a href="<?= site_url('marketplaces/mercadolivre') ?>">Mercado Livre<?= $row['integration_id'] ? ' · conta #' . (int) $row['integration_id'] : '' ?></a>
+                            <?php elseif ($row['integration_type'] === 'automation'): ?>
+                                <a href="<?= site_url('sync?status=failed') ?>">Automação<?= $row['integration_id'] ? ' · job #' . (int) $row['integration_id'] : '' ?></a>
                             <?php else: ?>
                                 <?= esc($row['integration_type']) ?> <?= $row['integration_id'] ? '#' . (int) $row['integration_id'] : '' ?>
                             <?php endif ?>

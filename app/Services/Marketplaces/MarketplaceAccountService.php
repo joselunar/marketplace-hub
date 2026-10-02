@@ -199,11 +199,14 @@ class MarketplaceAccountService
     }
 
     /**
-     * Contas que pedem ação: reconexão manual ou token vencido (renovação automática parada).
+     * Contas que pedem ação: reconexão manual, token vencido ou prestes a
+     * vencer sem ter sido renovado (renovação automática parada).
      *
-     * @return array{reconnect: int, expired: int}
+     * @param int $expiringMinutes a renovação agendada acontece bem antes disso
+     *
+     * @return array{reconnect: int, expired: int, expiring: int}
      */
-    public function attentionSummary(): array
+    public function attentionSummary(int $expiringMinutes = 15): array
     {
         $now = Time::now()->toDateTimeString();
 
@@ -212,6 +215,11 @@ class MarketplaceAccountService
             'expired'   => $this->accounts->where('status', MarketplaceAccountModel::STATUS_CONNECTED)
                 ->where('active', 1)
                 ->where('token_expires_at <', $now)
+                ->countAllResults(),
+            'expiring'  => $this->accounts->where('status', MarketplaceAccountModel::STATUS_CONNECTED)
+                ->where('active', 1)
+                ->where('token_expires_at >=', $now)
+                ->where('token_expires_at <', date('Y-m-d H:i:s', Time::now()->getTimestamp() + $expiringMinutes * 60))
                 ->countAllResults(),
         ];
     }

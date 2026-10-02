@@ -173,8 +173,10 @@ class MercadoLivreProductService
 
     /**
      * Recalcula o preço com a tarifa oficial e o fornecedor principal atual e envia ao anúncio.
+     *
+     * @param bool $skipUnchanged não registra evento quando o preço já está correto (conferência automática)
      */
-    public function updatePrice(int $listingId, ?int $userId = null): array
+    public function updatePrice(int $listingId, ?int $userId = null, bool $skipUnchanged = false): array
     {
         $listing = $this->publishedOrFail($listingId);
         $product = $this->productOf($listing);
@@ -194,6 +196,9 @@ class MercadoLivreProductService
             throw new BusinessRuleException('Com a tarifa oficial a margem ficaria abaixo da mínima; o preço não foi alterado.');
         }
         if (bccomp($breakdown->price, (string) $listing['price'], 2) === 0) {
+            if ($skipUnchanged) {
+                return $listing;
+            }
             $this->event($listingId, Events::ACTION_UPDATE_PRICE, Events::STATUS_SUCCESS, 'Preço já estava correto.', null, ['price' => $breakdown->price], $userId);
 
             return $this->findOrFail($listingId);
@@ -233,13 +238,19 @@ class MercadoLivreProductService
 
     /**
      * Envia o estoque seguro do fornecedor principal (zero se não houver fornecedor elegível).
+     *
+     * @param bool $skipUnchanged não chama a API quando a quantidade gravada já é a esperada (conferência automática)
      */
-    public function updateStock(int $listingId, ?int $userId = null): array
+    public function updateStock(int $listingId, ?int $userId = null, bool $skipUnchanged = false): array
     {
         $listing  = $this->publishedOrFail($listingId);
         $product  = $this->productOf($listing);
         $offer    = ($this->selection ?? service('supplierSelection'))->evaluate((int) $product['id'])->primary();
         $quantity = max(0, $offer?->availableStock ?? 0);
+
+        if ($skipUnchanged && $listing['available_quantity'] !== null && (int) $listing['available_quantity'] === $quantity) {
+            return $listing;
+        }
 
         try {
             $item = $this->meli->put((int) $listing['marketplace_account_id'], '/items/' . rawurlencode($listing['external_listing_id']), ['available_quantity' => $quantity]);

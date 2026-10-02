@@ -29,6 +29,11 @@ final class SettingsServiceTest extends DatabaseTestCase
             'ranking.weight_reliability'        => '15',
             'ranking.weight_priority'           => '5',
             'sync.auto_update_stock'            => '1',
+            'sync.supplier_stock_interval'      => '60',
+            'sync.supplier_price_interval'      => '360',
+            'sync.marketplace_stock_interval'   => '30',
+            'sync.marketplace_price_interval'   => '360',
+            'sync.orders_import_interval'       => '360',
         ];
     }
 

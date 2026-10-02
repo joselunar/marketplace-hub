@@ -24,6 +24,10 @@ use Throwable;
  */
 class SupplierImportService
 {
+    public const MODE_FULL   = 'full';
+    public const MODE_STOCK  = 'stock';
+    public const MODE_PRICES = 'prices';
+
     private const MAX_STORED_ERRORS = 200;
 
     public function __construct(
@@ -117,15 +121,30 @@ class SupplierImportService
     /**
      * Grava os itens do feed em uma única transação.
      *
-     * @return array{created: int, updated: int, linked: int}
+     * No modo "full" (catálogo) cria e vincula ofertas. Nos modos "stock" e
+     * "prices" só atualiza as ofertas que já existem, e apenas o estoque ou
+     * os custos; SKUs desconhecidos são contados em "skipped".
+     *
+     * @param self::MODE_* $mode
+     *
+     * @return array{created: int, updated: int, linked: int, skipped: int}
      */
-    public function apply(int $supplierId, SupplierFeedResult $feed): array
+    public function apply(int $supplierId, SupplierFeedResult $feed, string $mode = self::MODE_FULL): array
     {
-        $stats = ['created' => 0, 'updated' => 0, 'linked' => 0];
+        if (! in_array($mode, [self::MODE_FULL, self::MODE_STOCK, self::MODE_PRICES], true)) {
+            throw new InvalidArgumentException('Modo de sincronização inválido: ' . $mode);
+        }
+
+        $stats = ['created' => 0, 'updated' => 0, 'linked' => 0, 'skipped' => 0];
         $now   = date('Y-m-d H:i:s');
         $db    = $this->offers->db;
 
         $existingOffers = $this->existingOffers($supplierId);
+
+        if ($mode !== self::MODE_FULL) {
+            return $this->applyPartial($existingOffers, $feed, $mode, $now, $stats);
+        }
+
         [$bySku, $byEan] = $this->candidateProducts($feed->items);
 
         $db->transException(true)->transStart();
@@ -152,6 +171,40 @@ class SupplierImportService
                 $this->offers->skipValidation(true)->update($existing['id'], $data);
                 $stats['updated']++;
             }
+        }
+
+        $db->transComplete();
+        $this->offers->skipValidation(false);
+
+        return $stats;
+    }
+
+    /**
+     * @param array<string, array{id: int, product_id: int|null}> $existingOffers
+     * @param array{created: int, updated: int, linked: int, skipped: int} $stats
+     *
+     * @return array{created: int, updated: int, linked: int, skipped: int}
+     */
+    private function applyPartial(array $existingOffers, SupplierFeedResult $feed, string $mode, string $now, array $stats): array
+    {
+        $db = $this->offers->db;
+        $db->transException(true)->transStart();
+
+        foreach ($feed->items as $item) {
+            $existing = $existingOffers[mb_strtolower($item->supplierSku)] ?? null;
+
+            if ($existing === null) {
+                $stats['skipped']++;
+
+                continue;
+            }
+
+            $data = $mode === self::MODE_STOCK
+                ? ['stock_quantity' => $item->stockQuantity]
+                : ['cost_price' => $item->costPrice] + ($item->shippingCost !== null ? ['shipping_cost' => $item->shippingCost] : []);
+
+            $this->offers->skipValidation(true)->update($existing['id'], $data + ['last_sync_at' => $now]);
+            $stats['updated']++;
         }
 
         $db->transComplete();

@@ -15,7 +15,7 @@ O catálogo é **interno e único**: um produto (SKU interno) pode receber ofert
 - Publicar e sincronizar anúncios no Mercado Livre e, depois, em outros marketplaces.
 - Manter auditoria completa das alterações e das sincronizações.
 
-Status atual: **Fases 1 a 7 concluídas** (base, autenticação, fornecedores, catálogo, ofertas, importação CSV, motor de seleção de fornecedores, precificação, conexão OAuth com o Mercado Livre, publicação de anúncios, notificações, pedidos e pedidos aos fornecedores). Veja o [ROADMAP](ROADMAP.md).
+Status atual: **Fases 1 a 8 concluídas** (base, autenticação, fornecedores, catálogo, ofertas, importação CSV, motor de seleção de fornecedores, precificação, conexão OAuth com o Mercado Livre, publicação de anúncios, notificações, pedidos, pedidos aos fornecedores, fila de jobs com agendador, atualização automática opcional de estoque e preço e dashboard completo). Veja o [ROADMAP](ROADMAP.md).
 
 ## Arquitetura
 
@@ -23,7 +23,7 @@ Monólito modular em CodeIgniter 4, organizado em MVC + camada de serviços:
 
 ```
 app/
-├── Commands/          # Comandos spark (suppliers:select, meli:refresh-token, meli:process-notifications, meli:import-orders)
+├── Commands/          # Comandos spark (agendador, worker, sincronizações, tokens, notificações, pedidos)
 ├── Config/            # Configurações (filtros, rotas, menu, catálogo de settings, conectores)
 ├── Controllers/       # Controllers finos: validam entrada HTTP e delegam aos services
 │   └── Api/           # API interna JSON (autenticada por sessão)
@@ -35,10 +35,12 @@ app/
 ├── Exceptions/        # ValidationException, BusinessRuleException
 ├── Filters/           # auth, guest, role, limites de login, ações no marketplace e webhook
 ├── Helpers/           # Helpers de interface (formatação, badges)
+├── Jobs/              # Jobs da fila (sincronizações, tokens, notificações, pedidos)
 ├── Models/            # Acesso a dados via Query Builder
 ├── Services/          # Regras de negócio
 │   ├── Audit/         # Auditoria com remoção de dados sensíveis
 │   ├── Auth/
+│   ├── Automation/    # Fila de jobs, agendador e atualização automática dos anúncios
 │   ├── Catalog/       # Categorias e produtos
 │   ├── Dashboard/
 │   ├── Marketplaces/  # Contas conectadas (genérico) e MercadoLivre/ (HTTP, OAuth, categorias, anúncios, pedidos, notificações)
@@ -63,6 +65,7 @@ Decisões principais:
 - **Motor de seleção separado em duas partes**: `SupplierRanker` faz só o cálculo (sem banco, testável isoladamente) e `SupplierSelectionService` carrega os dados, grava o resultado e registra as trocas.
 - **Precificação no mesmo padrão**: `PriceCalculator` é puro e `PricingService` resolve margens e parâmetros. O motor de seleção usa o calculador para aplicar a margem mínima a cada oferta e grava o preço do fornecedor escolhido, então seleção e preço nunca ficam dessincronizados.
 - **Tarifas de marketplace nunca ficam no código.** Os valores de **Configurações** servem para o preço sugerido e o simulador; na publicação e na atualização de preço de um anúncio, a tarifa é consultada na API oficial do Mercado Livre (`listing_prices`) e o preço é recalculado com ela.
+- **Nada pesado em requisição web.** Sincronizações rodam como jobs em fila no banco (`jobs`), executados pelo worker do cron com novas tentativas para falhas temporárias; a tela só enfileira.
 - **Marketplaces genéricos**: `marketplaces` e `marketplace_accounts` não sabem nada do Mercado Livre; a integração fica em `Services/Marketplaces/MercadoLivre`, dividida em cliente HTTP, OAuth, provedor de token e categorias. O transporte HTTP é uma interface, então os testes nunca chamam a API real.
 
 ## Stack
@@ -148,6 +151,8 @@ GRANT ALL PRIVILEGES ON marketplace_hub_test.* TO 'marketplace'@'localhost';
 | `orders` | Pedidos dos marketplaces: status, valores, tarifas, custo, lucro estimado, andamento junto aos fornecedores e pendência |
 | `order_items` | Itens do pedido, produto e anúncio ligados, fornecedor/oferta reservados, custo e lucro estimado |
 | `supplier_orders` | Pedido a cada fornecedor reservado: status, custo, número no fornecedor, rastreio e quem enviou |
+| `jobs` | Fila de jobs: tipo, payload, chave única contra duplicidade, status, tentativas, próxima tentativa, resultado e último erro |
+| `scheduled_tasks` | Última execução de cada tarefa agendada e os sinais de vida do agendador e do worker |
 
 ## Migrations
 
@@ -182,7 +187,7 @@ php spark serve --port 8080
 
 Acesse <http://localhost:8080> e entre com o e-mail e a senha definidos em `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`.
 
-Telas disponíveis: dashboard, fornecedores, categorias, produtos, ofertas, simulador de preços, importação CSV, Mercado Livre (contas conectadas, categorias, anúncios e notificações), pedidos, usuários, configurações e logs (auditoria e sincronização). Os módulos das próximas fases aparecem desabilitados no menu.
+Telas disponíveis: dashboard, fornecedores, categorias, produtos, ofertas, simulador de preços, importação CSV, Mercado Livre (contas conectadas, categorias, anúncios e notificações), pedidos, sincronizações (fila de jobs e tarefas agendadas), usuários, configurações e logs (auditoria e sincronização).
 
 Em produção, aponte o servidor web para a pasta `public/`, use `CI_ENVIRONMENT=production` e `app.forceGlobalSecureRequests=true` (HTTPS).
 
@@ -231,18 +236,70 @@ custos fixos = custo + frete + custos extras por unidade (+ tarifa fixa, se o pr
 
 A tela do produto mostra a composição completa (custo, frete, comissão, tarifa fixa, impostos, extras, preço, lucro e margem), de onde veio cada margem e o preço de cada oferta. O **Simulador de preços** (menu Catálogo) calcula sem gravar nada, com as mesmas regras.
 
-## Cron
+## Automação
 
-A confiabilidade usa uma janela de tempo, então ela muda mesmo sem edições. Agende o recálculo (ele também atualiza os preços gravados), a renovação dos tokens do Mercado Livre, o processamento das notificações e a importação de pedidos como rede de segurança:
+Toda a automação roda a partir de **uma única linha de cron por minuto**:
 
 ```cron
-0 * * * * cd /caminho/marketplace-hub && php spark suppliers:select >> writable/logs/cron.log 2>&1
-*/30 * * * * cd /caminho/marketplace-hub && php spark meli:refresh-token >> writable/logs/cron.log 2>&1
-* * * * * cd /caminho/marketplace-hub && php spark meli:process-notifications >> writable/logs/cron.log 2>&1
-15 */6 * * * cd /caminho/marketplace-hub && php spark meli:import-orders --days 2 >> writable/logs/cron.log 2>&1
+* * * * * cd /caminho/marketplace-hub && php spark schedule:run && php spark jobs:work >> writable/logs/cron.log 2>&1
 ```
 
-Opções do comando:
+- `schedule:run` (agendador) enfileira os jobs das tarefas vencidas e termina em segundos.
+- `jobs:work` (worker) executa a fila até esvaziá-la ou atingir 50 segundos / 200 jobs (`Config\Automation`), para caber no minuto do cron. Vários workers podem rodar juntos: a reserva de cada job é atômica.
+
+Tarefas agendadas (intervalos em **Configurações > Sincronização**; 0 desliga):
+
+| Tarefa | Intervalo | Job |
+|---|---|---|
+| Processar notificações do Mercado Livre | 1 min (só com notificação na fila) | `ProcessMercadoLivreNotificationsJob` |
+| Renovar tokens do Mercado Livre | 15 min (tokens vencendo em até 30 min) | `RefreshMercadoLivreTokenJob`, um por conta |
+| Recalcular fornecedores e preços | 60 min (a confiabilidade usa uma janela de tempo) | `RecalculateSupplierSelectionJob` |
+| Sincronizar estoque dos fornecedores | 60 min | `SyncSupplierStockJob`, um por fornecedor com adapter |
+| Sincronizar custos dos fornecedores | 360 min | `SyncSupplierPricesJob`, um por fornecedor com adapter |
+| Conferir estoque dos anúncios | 30 min, só com a atualização automática de estoque ligada | `SyncMercadoLivreStockJob`, um por anúncio diferente do fornecedor |
+| Conferir preço dos anúncios | 360 min, só com a atualização automática de preço ligada | `SyncMercadoLivrePricesJob`, um por anúncio |
+| Importar pedidos recentes | 360 min (rede de segurança para notificações perdidas) | `ImportMercadoLivreOrdersJob`, um por conta |
+
+Como a fila funciona:
+
+- **Sem duplicidade**: um job igual (mesmo tipo e dados) que ainda espera na fila não é criado de novo.
+- **Novas tentativas**: falhas temporárias (sem resposta, HTTP 429 ou 5xx do Mercado Livre, erro de rede) voltam para a fila com espera de 1, 2, 4, 8... minutos (máximo de 1 hora), até 5 tentativas. Regras de negócio (ex.: preço abaixo da margem mínima), autorização revogada e operações que o fornecedor não oferece falham na hora, sem insistir.
+- **Falha definitiva** fica registrada no job, em `sync_logs` (integração `automation`, aba **Sincronizações** dos logs) e no alerta do dashboard.
+- Jobs presos em "executando" por mais de 15 minutos (processo interrompido) voltam para a fila; concluídos e cancelados com mais de 30 dias são apagados.
+
+A tela **Automação > Sincronizações** mostra quando o agendador e o worker rodaram pela última vez, as tarefas com a próxima execução e o botão **Executar agora**, e a fila com filtros, **repetir** e **cancelar** (em lote só para administradores). Se o agendador ficar mais de 10 minutos sem rodar, a tela e o dashboard avisam.
+
+### Sincronização com fornecedores
+
+Só fornecedores **ativos com adapter registrado** em `Config\SupplierConnectors` são sincronizados. O adapter é escrito a partir da documentação oficial do fornecedor; sem ele, nada é simulado. Fornecedores manuais e por CSV continuam sendo atualizados pela importação de arquivo.
+
+- Estoque usa `fetchStock()` (ou o catálogo, `fetchProducts()`, se o fornecedor só oferecer isso) e altera **apenas** o estoque das ofertas existentes; custos usam `fetchPrices()` e alteram apenas custo e frete. SKUs desconhecidos são contados, nunca criados.
+- Cada sincronização grava `sync_logs` (`sync_stock` / `sync_prices`), que alimenta a confiabilidade do fornecedor, e recalcula fornecedor principal e preço dos produtos afetados.
+
+### Atualização automática de estoque e preço (opcional)
+
+Desligadas por padrão em **Configurações > Sincronização**.
+
+- **Estoque**: sempre que o estoque seguro do fornecedor principal mudar (importação, sincronização, edição de oferta, troca de fornecedor, pedido), os anúncios ativos ou pausados do produto recebem a nova quantidade. A conferência periódica corrige o que tiver ficado diferente. Quantidade igual não chama a API.
+- **Preço**: quando o preço sugerido muda, o preço é recalculado com a tarifa oficial (`listing_prices`) e enviado. **Preço abaixo da margem mínima nunca é enviado**: o job falha e aparece no dashboard.
+- Só anúncios publicados, ativos ou pausados, de contas conectadas entram na atualização.
+
+### Comandos
+
+```bash
+php spark schedule:run                     # enfileira as tarefas vencidas
+php spark jobs:work                        # executa a fila (--max-jobs 50 --max-time 30)
+php spark suppliers:sync                   # estoque e custos de todos os fornecedores com adapter
+php spark suppliers:sync --supplier 3 --only stock
+php spark suppliers:sync --queue           # só enfileira, com novas tentativas
+php spark meli:sync-stock                  # anúncios com estoque diferente (respeita a configuração)
+php spark meli:sync-stock --force          # mesmo com a atualização automática desligada
+php spark meli:sync-prices --listing 12    # um anúncio
+php spark marketplace:sync                 # tokens, notificações, pedidos, estoque e preço agora + worker
+php spark marketplace:sync --no-work       # só enfileira
+```
+
+Os comandos das fases anteriores continuam disponíveis para uso manual:
 
 ```bash
 php spark suppliers:select                 # todos os produtos com ofertas
@@ -262,8 +319,6 @@ php spark meli:process-notifications --limit 500
 php spark meli:import-orders                      # pedidos atualizados nos últimos 2 dias, todas as contas
 php spark meli:import-orders --days 7 --account 2
 ```
-
-Os jobs de sincronização com fornecedores e marketplaces chegam na Fase 8.
 
 ## Mercado Livre
 
@@ -307,7 +362,7 @@ A publicação segue [Publicar produtos](https://developers.mercadolivre.com.br/
 
 Seguem [Notificações](https://developers.mercadolivre.com.br/pt_br/produto-receba-notificacoes). No aplicativo do Mercado Livre, cadastre `https://seu-dominio/webhooks/mercadolivre` como URL de notificações e assine os tópicos `orders_v2` e `items`.
 
-- O Mercado Livre exige HTTP 200 em até 500 ms. Por isso o endpoint só **valida e grava** a notificação em `webhook_events`; o pedido ou anúncio é consultado depois, por `meli:process-notifications` (cron a cada minuto) ou pelo botão **Processar fila** na aba **Notificações**.
+- O Mercado Livre exige HTTP 200 em até 500 ms. Por isso o endpoint só **valida e grava** a notificação em `webhook_events`; o pedido ou anúncio é consultado depois, pelo agendador (a cada minuto), por `meli:process-notifications` ou pelo botão **Processar fila** na aba **Notificações**.
 - Validação: corpo JSON de até 16 KB, `topic`, `resource` e `user_id` obrigatórios, `application_id` igual ao `MELI_CLIENT_ID` quando ele está configurado (senão 403) e, opcionalmente, IP de origem na lista `MELI_WEBHOOK_IPS` (a documentação publica os IPs de envio). A rota fica fora do CSRF e da sessão e tem limite de requisições por IP.
 - **Idempotência**: a mesma notificação reenviada (mesmo `_id`, ou mesmo tópico + recurso + envio) não cria outra linha, e o processamento sempre lê o estado atual do recurso. Notificações pendentes do mesmo recurso são resolvidas por uma única consulta.
 - Usuário sem conta conectada e tópicos não tratados são guardados como **ignorados** (com resposta 200, para o Mercado Livre não reenviar). Falhas temporárias voltam para a fila até 5 tentativas; 403 e 404 falham na hora. Notificações com falha ou ignoradas podem ser devolvidas à fila pela tela.
@@ -378,8 +433,8 @@ vendor/bin/phpunit --coverage-html build/coverage   # requer Xdebug ou PCOV
 Suítes:
 
 - **unit**: normalização decimal, conector CSV, fábrica de conectores, limpeza de dados sensíveis na auditoria, regras do ranking de fornecedores (incluindo margem mínima), calculador de preço (fórmula, tarifa fixa por faixa, arredondamento, preço manual, percentuais inviáveis), lucro estimado de pedidos e utilitários do OAuth (PKCE com o vetor da RFC 7636, cifragem e mascaramento de tokens, tradução dos erros da API);
-- **database**: importação CSV, produtos, categorias, fornecedores/ofertas, configurações, motor de seleção (troca automática, histórico, estoque de segurança, confiabilidade), precificação (hierarquia de margens, bloqueio de preço abaixo da mínima, troca de fornecedor por margem, reprecificação por categoria) e Mercado Livre (state e PKCE, troca do code, tokens cifrados, rotação do refresh token, `invalid_grant`, falha de rede, repetição em 401, revogação, categorias e cache) e anúncios (prévia clássica e User Products, bloqueios, publicação com descrição e mapeamento, preço desatualizado, nova tentativa após erro, convergência da tarifa, preço, estoque, pausa, reativação e sincronização), pedidos (reserva de fornecedor e lucro, idempotência e versão antiga, estoque reservado, pagamento pendente, item sem produto, fraude, cancelamento, envio e acompanhamento, rollback, revalidação, importação) e notificações (gravação única, processamento posterior, agrupamento, validação, falha e nova tentativa), com transporte HTTP falso;
-- **feature**: login/logout, controle de acesso por papel, API interna, proteção CSRF, tela do produto com a explicação da escolha e a composição do preço, simulador, alertas de margem, conexão com o Mercado Livre de ponta a ponta (sem token completo na tela nem na API), explorador de categorias, webhook (sem sessão nem CSRF, recusas e filtro de IP), telas de pedidos e notificações, envio ao fornecedor, API de pedidos e comandos `suppliers:select` e `meli:refresh-token`.
+- **database**: importação CSV, produtos, categorias, fornecedores/ofertas, configurações, motor de seleção (troca automática, histórico, estoque de segurança, confiabilidade), precificação (hierarquia de margens, bloqueio de preço abaixo da mínima, troca de fornecedor por margem, reprecificação por categoria) e Mercado Livre (state e PKCE, troca do code, tokens cifrados, rotação do refresh token, `invalid_grant`, falha de rede, repetição em 401, revogação, categorias e cache) e anúncios (prévia clássica e User Products, bloqueios, publicação com descrição e mapeamento, preço desatualizado, nova tentativa após erro, convergência da tarifa, preço, estoque, pausa, reativação e sincronização), pedidos (reserva de fornecedor e lucro, idempotência e versão antiga, estoque reservado, pagamento pendente, item sem produto, fraude, cancelamento, envio e acompanhamento, rollback, revalidação, importação) e notificações (gravação única, processamento posterior, agrupamento, validação, falha e nova tentativa), automação (fila sem duplicidade, novas tentativas com espera crescente, classificação de falhas temporárias e definitivas, job interrompido, agendador e intervalos, sincronização de estoque e custos com adapter de teste, atualização automática de estoque e preço dos anúncios e queda do marketplace), com transporte HTTP falso;
+- **feature**: login/logout, controle de acesso por papel, API interna, proteção CSRF, tela do produto com a explicação da escolha e a composição do preço, simulador, alertas de margem, conexão com o Mercado Livre de ponta a ponta (sem token completo na tela nem na API), explorador de categorias, webhook (sem sessão nem CSRF, recusas e filtro de IP), telas de pedidos e notificações, envio ao fornecedor, API de pedidos, tela de sincronizações (executar agora, repetir, cancelar), alertas do dashboard e comandos `suppliers:select`, `meli:refresh-token`, `schedule:run`, `jobs:work`, `meli:sync-stock` e `suppliers:sync`.
 
 ## API interna
 
@@ -409,7 +464,7 @@ Rotas JSON autenticadas por sessão:
 | 5 | Mercado Livre: OAuth | Concluída |
 | 6 | Publicações | Concluída |
 | 7 | Notificações, pedidos e pedidos aos fornecedores | Concluída |
-| 8 | Automação (jobs, agendamentos, dashboard completo) | Próxima |
-| 9 | Outros marketplaces | Planejada |
+| 8 | Automação (jobs, agendamentos, dashboard completo) | Concluída |
+| 9 | Outros marketplaces | Próxima |
 
 Detalhes em [ROADMAP.md](ROADMAP.md).

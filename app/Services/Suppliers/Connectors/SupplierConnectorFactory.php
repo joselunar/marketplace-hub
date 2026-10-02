@@ -50,6 +50,14 @@ class SupplierConnectorFactory
      */
     public function orderConnector(array $supplier): ?SupplierConnectorInterface
     {
+        return $this->adapterFor($supplier, SupplierConnectorInterface::CAPABILITY_CREATE_ORDER);
+    }
+
+    /**
+     * Adapter registrado para o fornecedor com a capacidade pedida, ou null.
+     */
+    public function adapterFor(array $supplier, string $capability): ?SupplierConnectorInterface
+    {
         $class = $this->config->adapters[(int) $supplier['id']] ?? null;
         if ($class === null) {
             return null;
@@ -57,7 +65,12 @@ class SupplierConnectorFactory
 
         $connector = new $class($supplier, []);
 
-        return $connector->supports(SupplierConnectorInterface::CAPABILITY_CREATE_ORDER) ? $connector : null;
+        return $connector->supports($capability) ? $connector : null;
+    }
+
+    public function hasAdapter(int $supplierId): bool
+    {
+        return isset($this->config->adapters[$supplierId]);
     }
 
     /**

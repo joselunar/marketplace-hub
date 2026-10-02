@@ -3,6 +3,7 @@
 use App\Enums\SupplierIntegrationType;
 use App\Enums\SupplierStatus;
 use App\Enums\UserRole;
+use App\Models\JobModel;
 use App\Models\MarketplaceAccountModel;
 use App\Models\MarketplaceListingModel;
 use App\Models\OrderModel;
@@ -285,6 +286,21 @@ if (! function_exists('notification_status_badge')) {
         };
 
         return badge(WebhookEventModel::STATUS_LABELS[$status] ?? $status, $variant);
+    }
+}
+
+if (! function_exists('job_status_badge')) {
+    function job_status_badge(string $status): string
+    {
+        $variant = match ($status) {
+            JobModel::STATUS_COMPLETED => 'success',
+            JobModel::STATUS_FAILED    => 'danger',
+            JobModel::STATUS_PENDING   => 'warning',
+            JobModel::STATUS_RUNNING   => 'info',
+            default                    => 'secondary',
+        };
+
+        return badge(JobModel::STATUS_LABELS[$status] ?? $status, $variant);
     }
 }
 

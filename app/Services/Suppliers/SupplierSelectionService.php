@@ -10,11 +10,13 @@ use App\Models\ProductModel;
 use App\Models\SupplierOfferModel;
 use App\Models\SupplierSelectionLogModel;
 use App\Services\Audit\AuditService;
+use App\Services\Automation\ListingAutoSync;
 use App\Services\Pricing\PricingService;
 use App\Services\Settings\SettingsService;
 use App\Services\Suppliers\Selection\SupplierRanker;
 use App\Services\Suppliers\Selection\SupplierReliabilityService;
 use CodeIgniter\Database\BaseConnection;
+use Throwable;
 
 /**
  * Motor de seleção de fornecedores.
@@ -36,6 +38,8 @@ class SupplierSelectionService
     public const TRIGGER_COMMAND  = 'command';
     public const TRIGGER_SEED     = 'seed';
     public const TRIGGER_ORDER    = 'order';
+    public const TRIGGER_SYNC     = 'sync';
+    public const TRIGGER_SCHEDULE = 'schedule';
 
     public const TRIGGER_LABELS = [
         self::TRIGGER_MANUAL   => 'Recálculo manual',
@@ -48,6 +52,8 @@ class SupplierSelectionService
         self::TRIGGER_COMMAND  => 'Linha de comando',
         self::TRIGGER_SEED     => 'Dados de demonstração',
         self::TRIGGER_ORDER    => 'Pedido recebido',
+        self::TRIGGER_SYNC     => 'Sincronização automática',
+        self::TRIGGER_SCHEDULE => 'Recálculo agendado',
     ];
 
     public const PRICE_STATUS_OK            = 'ok';
@@ -74,6 +80,7 @@ class SupplierSelectionService
         private readonly ?SettingsService $settings = null,
         private readonly ?AuditService $audit = null,
         private readonly ?PricingService $pricing = null,
+        private readonly ?ListingAutoSync $autoSync = null,
     ) {
         $this->db = $this->offers->db;
     }
@@ -258,7 +265,7 @@ class SupplierSelectionService
 
         $this->db->transException(true)->transStart();
 
-        $locked     = $this->db->query('SELECT selected_offer_id FROM products WHERE id = ? FOR UPDATE', [$productId])->getRowArray();
+        $locked     = $this->db->query('SELECT selected_offer_id, suggested_price, price_status FROM products WHERE id = ? FOR UPDATE', [$productId])->getRowArray();
         $previousId = isset($locked['selected_offer_id']) ? (int) $locked['selected_offer_id'] : null;
         $previous   = $previousId !== $newId || $removedOffer !== null
             ? $this->previousInfo($result, $previousId, $removedOffer)
@@ -274,10 +281,11 @@ class SupplierSelectionService
             ]);
         }
 
+        $pricing = $this->pricingColumns($result, $now);
         $this->db->table('products')->where('id', $productId)->update([
             'selected_offer_id'    => $newId,
             'selection_updated_at' => $now,
-        ] + $this->pricingColumns($result, $now));
+        ] + $pricing);
 
         $changed = $previousId !== $newId || ($previousId === null && $removedOffer !== null);
 
@@ -287,7 +295,32 @@ class SupplierSelectionService
 
         $this->db->transComplete();
 
+        $priceChanged = $pricing['price_status'] === self::PRICE_STATUS_OK
+            && ($locked['price_status'] ?? null) === self::PRICE_STATUS_OK
+                ? bccomp((string) $locked['suggested_price'], (string) $pricing['suggested_price'], 2) !== 0
+                : $pricing['price_status'] === self::PRICE_STATUS_OK;
+        $this->notifyListings($productId, $priceChanged);
+
         return $changed;
+    }
+
+    /**
+     * Com a atualização automática ligada, enfileira o envio de estoque/preço
+     * dos anúncios do produto. A seleção já foi gravada: uma falha aqui fica
+     * no log e a conferência periódica do agendador corrige depois.
+     */
+    private function notifyListings(int $productId, bool $priceChanged): void
+    {
+        try {
+            $this->autoSync()->afterSelection($productId, $priceChanged);
+        } catch (Throwable $e) {
+            log_message('error', 'Falha ao enfileirar a atualização dos anúncios do produto {id}: {message}', ['id' => $productId, 'message' => $e->getMessage()]);
+        }
+    }
+
+    private function autoSync(): ListingAutoSync
+    {
+        return $this->autoSync ?? service('listingAutoSync');
     }
 
     /**

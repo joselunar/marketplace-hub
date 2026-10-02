@@ -100,6 +100,47 @@ body.app {
     line-height: 1.2;
 }
 
+.sales-chart {
+    display: flex;
+    align-items: stretch;
+    gap: .35rem;
+    height: 180px;
+}
+
+.sales-chart-col {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.sales-chart-bar-wrap {
+    flex: 1;
+    display: flex;
+    align-items: flex-end;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.sales-chart-bar {
+    width: 100%;
+    background: var(--bs-primary);
+    border-radius: .25rem .25rem 0 0;
+    opacity: .85;
+}
+
+.sales-chart-col:hover .sales-chart-bar {
+    opacity: 1;
+}
+
+.sales-chart-label {
+    font-size: .65rem;
+    color: #6b7280;
+    text-align: center;
+    margin-top: .25rem;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
 .table thead th {
     font-size: .75rem;
     text-transform: uppercase;

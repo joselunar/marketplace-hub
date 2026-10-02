@@ -202,7 +202,7 @@ final class MercadoLivreAuthServiceTest extends DatabaseTestCase
         }
 
         $this->seeInDatabase('marketplace_accounts', ['id' => $id, 'status' => MarketplaceAccountModel::STATUS_REAUTHORIZE]);
-        $this->assertSame(['reconnect' => 1, 'expired' => 0], $this->accounts->attentionSummary());
+        $this->assertSame(['reconnect' => 1, 'expired' => 0, 'expiring' => 0], $this->accounts->attentionSummary());
 
         $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('não está conectada');

@@ -74,12 +74,15 @@
 - Tratamento de cancelamento e de risco de fraude
 - Dashboard com pedidos, faturamento, lucro, margem e alerta de pedidos aguardando fornecedor; endpoints `GET /api/orders` e `GET /api/orders/{id}`
 
-## Fase 8 — Automação
+## Fase 8 — Automação ✅
 
-- Comandos `spark` de sincronização executados por cron
-- Fila de jobs com novas tentativas e registro em `sync_logs`
-- Atualização automática de estoque e preço (opcional, via configurações)
-- Dashboard completo
+- Fila de jobs no banco (`jobs`) com chave única contra duplicidade, reserva atômica, novas tentativas com espera crescente para falhas temporárias e falha definitiva registrada em `sync_logs`
+- Agendador (`schedule:run`) e worker (`jobs:work`) em uma única linha de cron por minuto, com sinal de vida de cada um (`scheduled_tasks`)
+- Jobs: estoque e custos dos fornecedores, recálculo de fornecedores e preços, estoque e preço dos anúncios, renovação de tokens, notificações e importação de pedidos
+- Sincronização com fornecedores só via adapter registrado, alterando apenas estoque ou custos das ofertas existentes
+- Atualização automática de estoque e preço dos anúncios (opcional, desligada por padrão), disparada por mudanças e por conferência periódica; preço abaixo da mínima nunca é enviado
+- Tela de sincronizações (tarefas, executar agora, fila, repetir, cancelar) e comandos `suppliers:sync`, `meli:sync-stock`, `meli:sync-prices` e `marketplace:sync`
+- Dashboard completo: anúncios ativos, vendas dos últimos 14 dias, pedidos recentes, produtos com maior lucro e alertas de agendador parado, jobs com falha, anúncios com erro e tokens prestes a vencer
 
 ## Fase 9 — Outros marketplaces
 

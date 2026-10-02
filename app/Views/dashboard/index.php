@@ -7,11 +7,12 @@ $cards = [
     ['label' => 'Produtos sem fornecedor', 'value' => $summary['productsWithoutOffer'], 'icon' => 'exclamation-diamond', 'color' => 'warning', 'url' => 'products?supplier=without'],
     ['label' => 'Produtos sem estoque', 'value' => $summary['productsOutOfStock'], 'icon' => 'box', 'color' => 'danger', 'url' => 'products?status=active&stock=out'],
     ['label' => 'Fornecedores ativos', 'value' => $summary['activeSuppliers'], 'icon' => 'truck', 'color' => 'success', 'url' => 'suppliers?status=active'],
+    ['label' => 'Anúncios ativos', 'value' => $summary['listings']['active'], 'icon' => 'megaphone', 'color' => 'info', 'url' => 'marketplaces/mercadolivre/listings?status=active'],
 ];
 ?>
 <div class="row g-3 mb-4">
     <?php foreach ($cards as $card): ?>
-        <div class="col-12 col-sm-6 col-xl-3">
+        <div class="col-12 col-sm-6 col-xl">
             <a href="<?= site_url($card['url']) ?>" class="card stat-card h-100 text-decoration-none text-body">
                 <div class="card-body d-flex align-items-center gap-3">
                     <span class="stat-icon bg-<?= $card['color'] ?>-subtle text-<?= $card['color'] ?>"><i class="bi bi-<?= $card['icon'] ?>"></i></span>
@@ -51,11 +52,91 @@ $orderCards = [
     <?php endforeach ?>
 </div>
 
+<?php
+$chart      = $summary['salesChart'];
+$maxRevenue = max(array_map(static fn (array $day): float => (float) $day['revenue'], $chart)) ?: 1.0;
+$chartTotal = array_sum(array_map(static fn (array $day): float => (float) $day['revenue'], $chart));
+$automation = $summary['automation'];
+$accounts   = $summary['marketplaceAccounts'];
+?>
+<div class="row g-3 mb-4">
+    <div class="col-12 col-xl-7">
+        <div class="card h-100">
+            <div class="card-header bg-white fw-semibold d-flex justify-content-between">
+                <span><i class="bi bi-bar-chart me-1"></i> Vendas dos últimos <?= count($chart) ?> dias</span>
+                <span class="small text-body-secondary fw-normal"><?= money((string) $chartTotal) ?> em <?= array_sum(array_column($chart, 'orders')) ?> pedido(s)</span>
+            </div>
+            <div class="card-body">
+                <div class="sales-chart" role="img" aria-label="Faturamento por dia nos últimos <?= count($chart) ?> dias">
+                    <?php foreach ($chart as $day): ?>
+                        <?php $height = (float) $day['revenue'] > 0 ? max(4, (int) round((float) $day['revenue'] / $maxRevenue * 100)) : 0 ?>
+                        <div class="sales-chart-col" title="<?= esc(date('d/m', strtotime($day['date'])) . ': ' . money($day['revenue']) . ' em ' . $day['orders'] . ' pedido(s)', 'attr') ?>">
+                            <div class="sales-chart-bar-wrap"><div class="sales-chart-bar" style="height: <?= $height ?>%"></div></div>
+                            <div class="sales-chart-label"><?= date('d/m', strtotime($day['date'])) ?></div>
+                        </div>
+                    <?php endforeach ?>
+                </div>
+                <?php if ($chartTotal == 0): ?>
+                    <div class="small text-body-secondary text-center mt-2">Nenhuma venda no período.</div>
+                <?php endif ?>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-xl-5">
+        <div class="card h-100">
+            <div class="card-header bg-white fw-semibold"><i class="bi bi-trophy me-1"></i> Produtos com maior lucro (30 dias)</div>
+            <ul class="list-group list-group-flush">
+                <?php foreach ($summary['topProducts'] as $product): ?>
+                    <li class="list-group-item small d-flex justify-content-between align-items-center gap-2">
+                        <span class="text-truncate">
+                            <a href="<?= site_url('products/' . (int) $product['id']) ?>" class="text-decoration-none fw-medium"><?= esc($product['sku']) ?></a>
+                            <span class="text-body-secondary"><?= esc($product['name']) ?></span>
+                        </span>
+                        <span class="text-nowrap text-end">
+                            <strong class="text-success"><?= money($product['profit']) ?></strong>
+                            <div class="text-body-secondary"><?= (int) $product['quantity'] ?> un. · <?= money($product['revenue']) ?></div>
+                        </span>
+                    </li>
+                <?php endforeach ?>
+                <?php if ($summary['topProducts'] === []): ?>
+                    <li class="list-group-item small text-body-secondary">Sem vendas com lucro calculado no período.</li>
+                <?php endif ?>
+            </ul>
+        </div>
+    </div>
+</div>
+
 <div class="row g-3">
     <div class="col-12 col-xl-7">
         <div class="card">
             <div class="card-header bg-white fw-semibold"><i class="bi bi-bell me-1"></i> Alertas</div>
             <ul class="list-group list-group-flush">
+                <?php if ($automation['heartbeat']['scheduler_late']): ?>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-clock-history text-danger me-2"></i><?= $automation['heartbeat']['scheduler'] === null
+                            ? 'O agendador nunca rodou: configure o cron de <code>schedule:run</code> e <code>jobs:work</code>'
+                            : 'O agendador não roda desde ' . format_datetime($automation['heartbeat']['scheduler']['last_run_at']) . ': sincronizações e renovação de tokens estão paradas' ?></span>
+                        <a href="<?= site_url('sync') ?>" class="btn btn-sm btn-outline-secondary">Ver</a>
+                    </li>
+                <?php endif ?>
+                <?php if ($automation['failedJobs'] > 0): ?>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-arrow-repeat text-danger me-2"></i><?= $automation['failedJobs'] ?> job(s) de sincronização falharam após as novas tentativas</span>
+                        <a href="<?= site_url('sync?status=failed') ?>" class="btn btn-sm btn-outline-secondary">Ver</a>
+                    </li>
+                <?php endif ?>
+                <?php if ($summary['listings']['errors'] > 0): ?>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-megaphone text-danger me-2"></i><?= $summary['listings']['errors'] ?> anúncio(s) com erro na publicação ou na última atualização</span>
+                        <a href="<?= site_url('marketplaces/mercadolivre/listings') ?>" class="btn btn-sm btn-outline-secondary">Ver</a>
+                    </li>
+                <?php endif ?>
+                <?php if ($accounts['expiring'] > 0): ?>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-hourglass-split text-warning me-2"></i><?= $accounts['expiring'] ?> conta(s) do Mercado Livre com token vencendo nos próximos minutos sem renovação</span>
+                        <a href="<?= site_url('marketplaces/mercadolivre') ?>" class="btn btn-sm btn-outline-secondary">Ver</a>
+                    </li>
+                <?php endif ?>
                 <?php if ($orders['awaitingSupplier'] > 0): ?>
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                         <span>
@@ -109,7 +190,7 @@ $orderCards = [
                 <?php endif ?>
                 <?php if ($summary['marketplaceAccounts']['expired'] > 0): ?>
                     <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-hourglass-bottom text-warning me-2"></i><?= $summary['marketplaceAccounts']['expired'] ?> conta(s) do Mercado Livre com token vencido (confira o cron do <code>meli:refresh-token</code>)</span>
+                        <span><i class="bi bi-hourglass-bottom text-warning me-2"></i><?= $summary['marketplaceAccounts']['expired'] ?> conta(s) do Mercado Livre com token vencido (confira o cron do agendador)</span>
                         <a href="<?= site_url('marketplaces/mercadolivre') ?>" class="btn btn-sm btn-outline-secondary">Ver</a>
                     </li>
                 <?php endif ?>
@@ -124,8 +205,9 @@ $orderCards = [
                 <?php endforeach ?>
                 <?php if ($summary['productsWithoutOffer'] === 0 && $summary['productsWithoutEligibleSupplier'] === 0 && $summary['productsBelowMinimumMargin'] === 0
                     && $summary['productsWithInvalidPricing'] === 0 && $summary['unlinkedOffers'] === 0 && $summary['recentSyncErrors'] === []
-                    && $summary['marketplaceAccounts']['reconnect'] === 0 && $summary['marketplaceAccounts']['expired'] === 0
-                    && $orders['awaitingSupplier'] === 0 && $orders['failedNotifications'] === 0): ?>
+                    && $accounts['reconnect'] === 0 && $accounts['expired'] === 0 && $accounts['expiring'] === 0
+                    && $orders['awaitingSupplier'] === 0 && $orders['failedNotifications'] === 0
+                    && ! $automation['heartbeat']['scheduler_late'] && $automation['failedJobs'] === 0 && $summary['listings']['errors'] === 0): ?>
                     <li class="list-group-item text-body-secondary small"><i class="bi bi-check-circle text-success me-1"></i> Nenhum alerta no momento.</li>
                 <?php endif ?>
             </ul>
@@ -133,6 +215,29 @@ $orderCards = [
     </div>
 
     <div class="col-12 col-xl-5">
+        <div class="card mb-3">
+            <div class="card-header bg-white fw-semibold d-flex justify-content-between">
+                <span><i class="bi bi-cart me-1"></i> Pedidos recentes</span>
+                <a href="<?= site_url('orders') ?>" class="small fw-normal">Ver todos</a>
+            </div>
+            <ul class="list-group list-group-flush">
+                <?php foreach ($summary['recentOrders'] as $order): ?>
+                    <li class="list-group-item small d-flex justify-content-between align-items-center gap-2">
+                        <span>
+                            <a href="<?= site_url('orders/' . (int) $order['id']) ?>" class="text-decoration-none fw-medium"><?= esc($order['external_order_id']) ?></a>
+                            <div class="text-body-secondary"><?= format_datetime($order['ordered_at']) ?></div>
+                        </span>
+                        <span class="text-end">
+                            <?= money($order['total_amount']) ?>
+                            <div><?= order_status_badge($order['status']) ?> <?= fulfillment_badge($order['fulfillment_status']) ?></div>
+                        </span>
+                    </li>
+                <?php endforeach ?>
+                <?php if ($summary['recentOrders'] === []): ?>
+                    <li class="list-group-item small text-body-secondary">Nenhum pedido importado ainda.</li>
+                <?php endif ?>
+            </ul>
+        </div>
         <div class="card mb-3">
             <div class="card-header bg-white fw-semibold"><i class="bi bi-arrow-left-right me-1"></i> Trocas recentes de fornecedor</div>
             <ul class="list-group list-group-flush">
@@ -156,7 +261,7 @@ $orderCards = [
             <div class="card-body small text-body-secondary">
                 <p class="mb-2">Próxima entrega:</p>
                 <ul class="mb-0">
-                    <li>Jobs de sincronização, agendamentos e dashboard completo (Fase 8)</li>
+                    <li>Outros marketplaces com interface comum de integração (Fase 9)</li>
                 </ul>
             </div>
         </div>

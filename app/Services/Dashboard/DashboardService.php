@@ -2,6 +2,8 @@
 
 namespace App\Services\Dashboard;
 
+use App\Models\JobModel;
+use App\Models\MarketplaceListingModel;
 use App\Models\OrderModel;
 use App\Models\ProductModel;
 use App\Models\SupplierModel;
@@ -9,6 +11,7 @@ use App\Models\SupplierOfferModel;
 use App\Models\SupplierSelectionLogModel;
 use App\Models\SyncLogModel;
 use App\Models\WebhookEventModel;
+use App\Services\Automation\JobQueue;
 use App\Services\Marketplaces\MarketplaceAccountService;
 use App\Services\Orders\OrderProfitCalculator;
 
@@ -18,6 +21,11 @@ use App\Services\Orders\OrderProfitCalculator;
  */
 class DashboardService
 {
+    private const CHART_DAYS    = 14;
+    private const RECENT_ORDERS = 5;
+    private const TOP_PRODUCTS  = 5;
+    private const TOP_DAYS      = 30;
+
     public function __construct(
         private readonly ProductModel $products = new ProductModel(),
         private readonly SupplierModel $suppliers = new SupplierModel(),
@@ -27,6 +35,7 @@ class DashboardService
         private readonly MarketplaceAccountService $marketplaceAccounts = new MarketplaceAccountService(),
         private readonly OrderModel $orders = new OrderModel(),
         private readonly WebhookEventModel $webhookEvents = new WebhookEventModel(),
+        private readonly ?JobQueue $queue = null,
     ) {
     }
 
@@ -53,7 +62,101 @@ class DashboardService
                 ->orderBy('started_at', 'DESC')
                 ->findAll(5),
             'orders'               => $this->ordersSummary(),
+            'listings'             => $this->listingsSummary(),
+            'automation'           => $this->automationSummary(),
+            'salesChart'           => $this->salesChart(),
+            'recentOrders'         => $this->orders
+                ->select('orders.id, orders.external_order_id, orders.status, orders.fulfillment_status, orders.total_amount, orders.estimated_profit, orders.ordered_at')
+                ->orderBy('orders.ordered_at', 'DESC')
+                ->findAll(self::RECENT_ORDERS),
+            'topProducts'          => $this->topProducts(),
         ];
+    }
+
+    /**
+     * Anúncios ativos e os que precisam de atenção (publicação recusada ou
+     * última atualização de preço/estoque com erro).
+     */
+    private function listingsSummary(): array
+    {
+        $listings = new MarketplaceListingModel();
+
+        return [
+            'active' => $listings->where('status', MarketplaceListingModel::STATUS_ACTIVE)->countAllResults(),
+            'paused' => $listings->where('status', MarketplaceListingModel::STATUS_PAUSED)->countAllResults(),
+            'errors' => $listings->groupStart()
+                ->where('status', MarketplaceListingModel::STATUS_ERROR)
+                ->orGroupStart()
+                    ->where('last_error IS NOT NULL', null, false)
+                    ->whereIn('status', [MarketplaceListingModel::STATUS_ACTIVE, MarketplaceListingModel::STATUS_PAUSED])
+                ->groupEnd()
+                ->groupEnd()
+                ->countAllResults(),
+        ];
+    }
+
+    /**
+     * Fila de jobs e situação do cron.
+     */
+    private function automationSummary(): array
+    {
+        $queue  = $this->queue ?? service('jobQueue');
+        $counts = $queue->counts();
+
+        return [
+            'failedJobs'  => $counts[JobModel::STATUS_FAILED],
+            'pendingJobs' => $counts[JobModel::STATUS_PENDING],
+            'heartbeat'   => $queue->heartbeat(),
+        ];
+    }
+
+    /**
+     * Pedidos e faturamento por dia, sem os cancelados, com os dias sem venda zerados.
+     *
+     * @return list<array{date: string, orders: int, revenue: string}>
+     */
+    private function salesChart(): array
+    {
+        $start = date('Y-m-d', strtotime('-' . (self::CHART_DAYS - 1) . ' days'));
+        $rows  = $this->orders->builder()
+            ->select('DATE(ordered_at) AS day, COUNT(*) AS orders, COALESCE(SUM(total_amount), 0) AS revenue', false)
+            ->where('ordered_at >=', $start . ' 00:00:00')
+            ->whereNotIn('status', OrderModel::CANCELLED_STATUSES)
+            ->groupBy('day')
+            ->get()
+            ->getResultArray();
+        $byDay = array_column($rows, null, 'day');
+
+        $chart = [];
+        for ($i = 0; $i < self::CHART_DAYS; $i++) {
+            $day     = date('Y-m-d', strtotime($start . ' +' . $i . ' days'));
+            $chart[] = [
+                'date'    => $day,
+                'orders'  => (int) ($byDay[$day]['orders'] ?? 0),
+                'revenue' => (string) ($byDay[$day]['revenue'] ?? '0.00'),
+            ];
+        }
+
+        return $chart;
+    }
+
+    /**
+     * Produtos com maior lucro estimado nos pedidos dos últimos 30 dias.
+     */
+    private function topProducts(): array
+    {
+        return $this->orders->db->table('order_items oi')
+            ->select('p.id, p.sku, p.name, SUM(oi.quantity) AS quantity, SUM(oi.quantity * oi.unit_price) AS revenue, SUM(oi.estimated_profit) AS profit', false)
+            ->join('orders o', 'o.id = oi.order_id')
+            ->join('products p', 'p.id = oi.product_id')
+            ->where('o.ordered_at >=', date('Y-m-d H:i:s', strtotime('-' . self::TOP_DAYS . ' days')))
+            ->whereNotIn('o.status', OrderModel::CANCELLED_STATUSES)
+            ->where('oi.estimated_profit IS NOT NULL', null, false)
+            ->groupBy('p.id, p.sku, p.name')
+            ->orderBy('profit', 'DESC')
+            ->limit(self::TOP_PRODUCTS)
+            ->get()
+            ->getResultArray();
     }
 
     /**

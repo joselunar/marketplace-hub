@@ -4,6 +4,9 @@ namespace Config;
 
 use App\Services\Audit\AuditService;
 use App\Services\Auth\AuthService;
+use App\Services\Automation\JobQueue;
+use App\Services\Automation\ListingAutoSync;
+use App\Services\Automation\Scheduler;
 use App\Services\Marketplaces\MercadoLivre\Http\CurlTransport;
 use App\Services\Marketplaces\MercadoLivre\Http\HttpTransport;
 use App\Services\Marketplaces\MercadoLivre\MercadoLivreNotificationService;
@@ -14,6 +17,7 @@ use App\Services\Orders\OrderService;
 use App\Services\Pricing\PricingService;
 use App\Services\Settings\SettingsService;
 use App\Services\Suppliers\SupplierSelectionService;
+use App\Services\Suppliers\SupplierSyncService;
 use CodeIgniter\Config\BaseService;
 
 /**
@@ -114,6 +118,42 @@ class Services extends BaseService
         }
 
         return new OrderService();
+    }
+
+    public static function supplierSync(bool $getShared = true): SupplierSyncService
+    {
+        if ($getShared) {
+            return static::getSharedInstance('supplierSync');
+        }
+
+        return new SupplierSyncService();
+    }
+
+    public static function jobQueue(bool $getShared = true): JobQueue
+    {
+        if ($getShared) {
+            return static::getSharedInstance('jobQueue');
+        }
+
+        return new JobQueue();
+    }
+
+    public static function scheduler(bool $getShared = true): Scheduler
+    {
+        if ($getShared) {
+            return static::getSharedInstance('scheduler');
+        }
+
+        return new Scheduler();
+    }
+
+    public static function listingAutoSync(bool $getShared = true): ListingAutoSync
+    {
+        if ($getShared) {
+            return static::getSharedInstance('listingAutoSync');
+        }
+
+        return new ListingAutoSync();
     }
 
     /**

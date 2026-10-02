@@ -56,7 +56,7 @@ class Navigation extends BaseConfig
         [
             'label' => 'Automação',
             'items' => [
-                ['label' => 'Sincronizações', 'icon' => 'arrow-repeat', 'soon' => 'Fase 8'],
+                ['label' => 'Sincronizações', 'icon' => 'arrow-repeat', 'url' => 'sync', 'prefix' => 'sync'],
             ],
         ],
         [

@@ -35,6 +35,7 @@ class SupplierSelectionService
     public const TRIGGER_CATEGORY = 'category';
     public const TRIGGER_COMMAND  = 'command';
     public const TRIGGER_SEED     = 'seed';
+    public const TRIGGER_ORDER    = 'order';
 
     public const TRIGGER_LABELS = [
         self::TRIGGER_MANUAL   => 'Recálculo manual',
@@ -46,6 +47,7 @@ class SupplierSelectionService
         self::TRIGGER_CATEGORY => 'Alteração da categoria',
         self::TRIGGER_COMMAND  => 'Linha de comando',
         self::TRIGGER_SEED     => 'Dados de demonstração',
+        self::TRIGGER_ORDER    => 'Pedido recebido',
     ];
 
     public const PRICE_STATUS_OK            = 'ok';

@@ -63,18 +63,23 @@
 - Mapeamento categoria interna → categoria do Mercado Livre lembrado após cada publicação
 - Publicação automática prevista nas configurações e desabilitada por padrão
 
-## Fase 7 — Pedidos
+## Fase 7 — Notificações, pedidos e pedidos aos fornecedores ✅
 
-- Recebimento e listagem de pedidos
-- Associação do pedido ao fornecedor selecionado
-- Status e acompanhamento
+- Webhook `POST /webhooks/mercadolivre`: valida e grava em `webhook_events` (resposta rápida), com idempotência, validação do aplicativo, limite por IP e filtro de IP opcional
+- Processamento posterior da fila (`meli:process-notifications` e tela de notificações), com novas tentativas, falha definitiva em 403/404 e agrupamento por recurso
+- Pedidos (`orders`, `order_items`) lidos em `GET /orders/{id}` e importação manual por `GET /orders/search` (`meli:import-orders`)
+- Item ligado ao produto pelo anúncio ou pelo SKU; fornecedores revalidados e reservados quando o pedido é pago, descontando o estoque já reservado
+- Lucro estimado com a tarifa do pedido (ou estimada antes do crédito), custos, impostos e extras
+- Pedido ao fornecedor (`supplier_orders`) pendente, botão "Enviar pedido ao fornecedor" sem compra automática e acompanhamento (despacho, entrega, rastreio)
+- Tratamento de cancelamento e de risco de fraude
+- Dashboard com pedidos, faturamento, lucro, margem e alerta de pedidos aguardando fornecedor; endpoints `GET /api/orders` e `GET /api/orders/{id}`
 
 ## Fase 8 — Automação
 
 - Comandos `spark` de sincronização executados por cron
 - Fila de jobs com novas tentativas e registro em `sync_logs`
-- Webhooks do Mercado Livre com validação de origem
 - Atualização automática de estoque e preço (opcional, via configurações)
+- Dashboard completo
 
 ## Fase 9 — Outros marketplaces
 

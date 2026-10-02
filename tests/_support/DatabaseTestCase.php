@@ -46,7 +46,7 @@ abstract class DatabaseTestCase extends CIUnitTestCase
 
         $this->clearTables();
 
-        foreach (['auth', 'audit', 'settings', 'pricing', 'supplierSelection', 'mercadoLivre', 'mercadoLivreTransport', 'mercadoLivreProducts'] as $service) {
+        foreach (['auth', 'audit', 'settings', 'pricing', 'supplierSelection', 'mercadoLivre', 'mercadoLivreTransport', 'mercadoLivreProducts', 'mercadoLivreOrders', 'mercadoLivreNotifications', 'orders'] as $service) {
             Services::resetSingle($service);
         }
     }

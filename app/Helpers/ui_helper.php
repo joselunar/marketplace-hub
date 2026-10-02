@@ -5,6 +5,9 @@ use App\Enums\SupplierStatus;
 use App\Enums\UserRole;
 use App\Models\MarketplaceAccountModel;
 use App\Models\MarketplaceListingModel;
+use App\Models\OrderModel;
+use App\Models\SupplierOrderModel;
+use App\Models\WebhookEventModel;
 use App\Services\Suppliers\SupplierSelectionService;
 use CodeIgniter\I18n\Time;
 
@@ -224,6 +227,64 @@ if (! function_exists('listing_status_badge')) {
         return $subStatus !== null && $subStatus !== ''
             ? $badge . '<div class="small text-body-secondary">' . esc(str_replace(['_', ','], [' ', ', '], $subStatus)) . '</div>'
             : $badge;
+    }
+}
+
+if (! function_exists('order_status_badge')) {
+    function order_status_badge(string $status): string
+    {
+        $variant = match (true) {
+            in_array($status, OrderModel::PAID_STATUSES, true)      => 'success',
+            in_array($status, OrderModel::CANCELLED_STATUSES, true) => 'secondary',
+            default                                                 => 'warning',
+        };
+
+        return badge(OrderModel::STATUS_LABELS[$status] ?? $status, $variant);
+    }
+}
+
+if (! function_exists('fulfillment_badge')) {
+    function fulfillment_badge(string $status): string
+    {
+        $variant = match ($status) {
+            OrderModel::FULFILLMENT_ATTENTION => 'danger',
+            OrderModel::FULFILLMENT_PENDING   => 'warning',
+            OrderModel::FULFILLMENT_SENT      => 'info',
+            OrderModel::FULFILLMENT_COMPLETED => 'success',
+            default                           => 'secondary',
+        };
+
+        return badge(OrderModel::FULFILLMENT_LABELS[$status] ?? $status, $variant);
+    }
+}
+
+if (! function_exists('supplier_order_badge')) {
+    function supplier_order_badge(string $status): string
+    {
+        $variant = match ($status) {
+            SupplierOrderModel::STATUS_PENDING   => 'warning',
+            SupplierOrderModel::STATUS_SENT      => 'info',
+            SupplierOrderModel::STATUS_SHIPPED   => 'primary',
+            SupplierOrderModel::STATUS_DELIVERED => 'success',
+            default                              => 'secondary',
+        };
+
+        return badge(SupplierOrderModel::STATUS_LABELS[$status] ?? $status, $variant);
+    }
+}
+
+if (! function_exists('notification_status_badge')) {
+    function notification_status_badge(string $status): string
+    {
+        $variant = match ($status) {
+            WebhookEventModel::STATUS_PROCESSED  => 'success',
+            WebhookEventModel::STATUS_FAILED     => 'danger',
+            WebhookEventModel::STATUS_PENDING    => 'warning',
+            WebhookEventModel::STATUS_PROCESSING => 'info',
+            default                              => 'secondary',
+        };
+
+        return badge(WebhookEventModel::STATUS_LABELS[$status] ?? $status, $variant);
     }
 }
 

@@ -25,6 +25,7 @@ final class AccessControlTest extends FeatureTestCase
             'offers', 'offers/new', "offers/{$offer}/edit", 'offers?link=unlinked',
             'imports', 'imports/new', 'users', 'users/new', 'settings', 'logs', 'logs?tab=sync',
             'marketplaces/mercadolivre', 'marketplaces/mercadolivre/categories', 'marketplaces/mercadolivre/listings',
+            'marketplaces/mercadolivre/notifications', 'orders', 'orders?fulfillment=awaiting_supplier&period=7d',
         ];
 
         foreach ($pages as $page) {

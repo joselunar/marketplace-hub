@@ -50,7 +50,7 @@ class Navigation extends BaseConfig
         [
             'label' => 'Vendas',
             'items' => [
-                ['label' => 'Pedidos', 'icon' => 'cart-check', 'soon' => 'Fase 7'],
+                ['label' => 'Pedidos', 'icon' => 'cart-check', 'url' => 'orders', 'prefix' => 'orders'],
             ],
         ],
         [

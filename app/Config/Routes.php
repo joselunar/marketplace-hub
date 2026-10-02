@@ -45,6 +45,16 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
         $routes->post('(:num)/delete', 'ProductController::delete/$1', ['filter' => 'role:admin']);
     });
 
+    $routes->get('orders', 'OrderController::index');
+    $routes->get('orders/(:num)', 'OrderController::show/$1');
+    $routes->group('orders', ['filter' => 'marketplacethrottle'], static function (RouteCollection $routes): void {
+        $routes->post('import', 'OrderController::import');
+        $routes->post('(:num)/sync', 'OrderController::sync/$1');
+        $routes->post('(:num)/reallocate', 'OrderController::reallocate/$1');
+        $routes->post('supplier-orders/(:num)/send', 'OrderController::sendToSupplier/$1');
+        $routes->post('supplier-orders/(:num)', 'OrderController::updateSupplierOrder/$1');
+    });
+
     $routes->get('pricing', 'PricingController::index');
     $routes->get('pricing/simulate', 'PricingController::simulate');
 
@@ -82,6 +92,12 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
             $routes->post('(:num)/activate', 'MercadoLivreListingController::activate/$1');
         });
 
+        $routes->get('notifications', 'MercadoLivreNotificationController::index');
+        $routes->group('notifications', ['filter' => 'marketplacethrottle'], static function (RouteCollection $routes): void {
+            $routes->post('process', 'MercadoLivreNotificationController::process');
+            $routes->post('(:num)/retry', 'MercadoLivreNotificationController::retry/$1');
+        });
+
         // Conectar, renovar e desconectar contas mexe em credenciais: só administradores.
         $routes->group('', ['filter' => 'role:admin'], static function (RouteCollection $routes): void {
             $routes->post('connect', 'MercadoLivreController::connect');
@@ -106,6 +122,9 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     });
 });
 
+// Notificações dos marketplaces (públicas; validadas no controller/service)
+$routes->post('webhooks/mercadolivre', 'WebhookController::mercadolivre', ['filter' => 'webhookthrottle']);
+
 // API interna (JSON, sessão autenticada)
 $routes->group('api', ['namespace' => 'App\Controllers\Api', 'filter' => 'auth'], static function (RouteCollection $routes): void {
     $routes->get('products', 'ProductController::index');
@@ -117,4 +136,6 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api', 'filter' => 'auth']
     $routes->get('suppliers', 'SupplierController::index');
     $routes->get('suppliers/(:num)', 'SupplierController::show/$1');
     $routes->get('marketplaces/accounts', 'MarketplaceAccountController::index');
+    $routes->get('orders', 'OrderController::index');
+    $routes->get('orders/(:num)', 'OrderController::show/$1');
 });

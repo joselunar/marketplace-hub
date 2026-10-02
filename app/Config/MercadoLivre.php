@@ -69,6 +69,35 @@ class MercadoLivre extends BaseConfig
     public string $logisticType = '';
     public string $shippingMode = '';
 
+    /**
+     * IPs de origem aceitos no webhook (MELI_WEBHOOK_IPS, separados por
+     * vírgula). A documentação de notificações publica a lista atual; vazio
+     * desliga a verificação. Atrás de proxy, configure Config\App::$proxyIPs.
+     *
+     * @var list<string>
+     */
+    public array $webhookAllowedIps = [];
+
+    /**
+     * Notificações são pequenas (cerca de 300 bytes); corpos maiores são recusados.
+     */
+    public int $webhookMaxBodyBytes = 16384;
+
+    /**
+     * Tentativas de processamento de uma notificação antes de marcá-la como falha.
+     */
+    public int $notificationMaxAttempts = 5;
+
+    /**
+     * Notificação presa em "processando" por mais que isto volta para a fila.
+     */
+    public int $notificationLockSeconds = 900;
+
+    /**
+     * Importação manual de pedidos: páginas de 50 consultadas em /orders/search.
+     */
+    public int $orderImportMaxPages = 4;
+
     public function __construct()
     {
         parent::__construct();
@@ -78,6 +107,11 @@ class MercadoLivre extends BaseConfig
         $this->redirectUri  = trim((string) env('MELI_REDIRECT_URI', $this->redirectUri));
         $this->logisticType = trim((string) env('MELI_LOGISTIC_TYPE', $this->logisticType));
         $this->shippingMode = trim((string) env('MELI_SHIPPING_MODE', $this->shippingMode));
+
+        $ips = trim((string) env('MELI_WEBHOOK_IPS', ''));
+        if ($ips !== '') {
+            $this->webhookAllowedIps = array_values(array_filter(array_map('trim', explode(',', $ips)), static fn (string $ip): bool => filter_var($ip, FILTER_VALIDATE_IP) !== false));
+        }
 
         $pkce = env('MELI_USE_PKCE');
         if ($pkce !== null && $pkce !== '') {

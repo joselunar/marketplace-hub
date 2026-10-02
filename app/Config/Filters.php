@@ -7,6 +7,7 @@ use App\Filters\GuestFilter;
 use App\Filters\LoginThrottleFilter;
 use App\Filters\MarketplaceThrottleFilter;
 use App\Filters\RoleFilter;
+use App\Filters\WebhookThrottleFilter;
 use CodeIgniter\Config\Filters as BaseFilters;
 use CodeIgniter\Filters\Cors;
 use CodeIgniter\Filters\CSRF;
@@ -44,6 +45,7 @@ class Filters extends BaseFilters
         'role'          => RoleFilter::class,
         'loginthrottle' => LoginThrottleFilter::class,
         'marketplacethrottle' => MarketplaceThrottleFilter::class,
+        'webhookthrottle'     => WebhookThrottleFilter::class,
     ];
 
     /**

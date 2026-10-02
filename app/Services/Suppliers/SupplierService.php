@@ -62,6 +62,10 @@ class SupplierService
             throw new BusinessRuleException('Este fornecedor possui ofertas cadastradas. Inative o fornecedor em vez de excluí-lo.');
         }
 
+        if ($this->suppliers->db->table('supplier_orders')->where('supplier_id', $id)->countAllResults() > 0) {
+            throw new BusinessRuleException('Este fornecedor tem pedidos registrados. Inative o fornecedor em vez de excluí-lo.');
+        }
+
         $this->suppliers->delete($id);
         $this->audit()->log('delete', 'supplier', $id, $current, null);
     }

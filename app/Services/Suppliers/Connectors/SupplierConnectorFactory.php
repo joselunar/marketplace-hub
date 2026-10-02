@@ -45,6 +45,22 @@ class SupplierConnectorFactory
     }
 
     /**
+     * Adapter registrado para o fornecedor que saiba criar pedidos, ou null
+     * (manual e CSV não enviam pedidos: o operador faz a compra).
+     */
+    public function orderConnector(array $supplier): ?SupplierConnectorInterface
+    {
+        $class = $this->config->adapters[(int) $supplier['id']] ?? null;
+        if ($class === null) {
+            return null;
+        }
+
+        $connector = new $class($supplier, []);
+
+        return $connector->supports(SupplierConnectorInterface::CAPABILITY_CREATE_ORDER) ? $connector : null;
+    }
+
+    /**
      * Conector de CSV para importação avulsa, independente do tipo de integração
      * principal do fornecedor (útil para cargas iniciais).
      */

@@ -48,7 +48,8 @@ final class SupplierSelectionTest extends FeatureTestCase
         $result = $this->actingAs($user)->post("products/{$productId}/selection");
 
         $result->assertRedirectTo(site_url("products/{$productId}"));
-        $result->assertSessionHas('success', 'Seleção recalculada: Fornecedor Gamma é o fornecedor principal.');
+        // Com o preço fixo de demonstração, a Gamma não atinge a margem mínima.
+        $result->assertSessionHas('success', 'Seleção recalculada: Fornecedor Beta é o fornecedor principal.');
         $this->seeInDatabase('supplier_selection_logs', ['product_id' => $productId, 'trigger' => 'manual', 'user_id' => $user['id']]);
     }
 
@@ -74,7 +75,7 @@ final class SupplierSelectionTest extends FeatureTestCase
         $result = $this->actingAs($this->createUser('admin'))->post('settings', ['settings' => $this->formValues($settings)]);
 
         $result->assertRedirectTo(site_url('settings'));
-        $this->assertStringContainsString('Seleção de fornecedores recalculada para 7 produto(s)', (string) session('success'));
+        $this->assertStringContainsString('Seleção de fornecedores e preços recalculados para 7 produto(s)', (string) session('success'));
     }
 
     public function testRejectsAllRankingWeightsZero(): void
@@ -99,11 +100,12 @@ final class SupplierSelectionTest extends FeatureTestCase
         $this->db->table('products')->update(['selected_offer_id' => null]);
 
         command('suppliers:select');
-        $this->assertStringContainsString('7 produto(s) avaliado(s), 6 troca(s)', $this->getStreamFilterBuffer());
+        $this->assertStringContainsString('7 produto(s) avaliado(s), 5 troca(s)', $this->getStreamFilterBuffer());
 
-        // 7 produtos com ofertas; o cabo HDMI não tem nenhuma elegível.
-        $this->assertSame(6, $this->db->table('products')->where('selected_offer_id IS NOT NULL', null, false)->countAllResults());
-        $this->assertSame(6, $this->db->table('supplier_selection_logs')->where('trigger', 'command')->countAllResults());
+        // 7 produtos com ofertas; o cabo HDMI não tem nenhuma elegível e o
+        // carregador tem preço fixo abaixo da margem mínima.
+        $this->assertSame(5, $this->db->table('products')->where('selected_offer_id IS NOT NULL', null, false)->countAllResults());
+        $this->assertSame(5, $this->db->table('supplier_selection_logs')->where('trigger', 'command')->countAllResults());
     }
 
     private function productId(string $sku): int

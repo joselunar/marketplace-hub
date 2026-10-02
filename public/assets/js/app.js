@@ -81,6 +81,61 @@
         });
     });
 
+    // Simulador de preços: o cálculo é feito no servidor; aqui só trocamos o
+    // fragmento de resultado sem recarregar a página.
+    document.querySelectorAll('[data-pricing-simulator]').forEach((form) => {
+        const target = document.querySelector('[data-pricing-result]');
+        let timer = null;
+        let controller = null;
+
+        const run = async () => {
+            const params = new URLSearchParams();
+            new FormData(form).forEach((value, key) => {
+                if (String(value).trim() !== '') {
+                    params.append(key, value);
+                }
+            });
+            const query = params.toString();
+            controller?.abort();
+            controller = new AbortController();
+
+            try {
+                const response = await fetch(`${form.dataset.endpoint}?${query}`, {
+                    headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' },
+                    credentials: 'same-origin',
+                    signal: controller.signal,
+                });
+
+                if (!response.ok && response.status !== 422) {
+                    throw new Error(`Falha na requisição (${response.status})`);
+                }
+
+                target.innerHTML = await response.text();
+                window.history.replaceState(null, '', `${form.action}?${query}`);
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    return;
+                }
+                target.replaceChildren();
+                const failure = document.createElement('div');
+                failure.className = 'alert alert-danger small mb-0';
+                failure.textContent = 'Não foi possível calcular agora. Tente novamente.';
+                target.appendChild(failure);
+                console.error(error);
+            }
+        };
+
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            run();
+        });
+
+        form.addEventListener('input', () => {
+            clearTimeout(timer);
+            timer = setTimeout(run, 400);
+        });
+    });
+
     // Autocomplete de produto (usa GET /api/products?q=).
     document.querySelectorAll('[data-product-autocomplete]').forEach((wrapper) => {
         const input = wrapper.querySelector('input[type="search"]');

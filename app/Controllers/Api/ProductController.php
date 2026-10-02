@@ -10,7 +10,8 @@ use CodeIgniter\HTTP\ResponseInterface;
 
 class ProductController extends BaseApiController
 {
-    private const LIST_FIELDS = 'products.id, products.sku, products.ean, products.name, products.brand, products.category_id, products.active, products.updated_at';
+    private const LIST_FIELDS = 'products.id, products.sku, products.ean, products.name, products.brand, products.category_id, products.active, '
+        . 'products.sale_price, products.suggested_price, products.estimated_margin, products.price_status, products.updated_at';
 
     public function index(): ResponseInterface
     {
@@ -23,6 +24,7 @@ class ProductController extends BaseApiController
             'category_id' => $this->queryString('category_id'),
             'status'      => $this->queryString('status'),
             'supplier'    => $this->queryString('supplier'),
+            'pricing'     => $this->queryString('pricing'),
         ]);
 
         $model->select(self::LIST_FIELDS)->applyFilters($filters);
@@ -97,5 +99,38 @@ class ProductController extends BaseApiController
         }
 
         return $this->respond(['data' => $result->toArray()]);
+    }
+
+    /**
+     * Preço com o fornecedor principal (ou, sem principal, com a oferta
+     * barrada apenas pela margem) e o preço de cada oferta avaliada.
+     */
+    public function pricing(int $id): ResponseInterface
+    {
+        try {
+            $result = service('supplierSelection')->evaluate($id);
+        } catch (BusinessRuleException $e) {
+            return $this->failNotFound($e->getMessage());
+        }
+
+        $product   = (new ProductModel())->select('sale_price, price_status, pricing_updated_at')->find($id);
+        $reference = $result->primary() ?? ($result->blockedOnlyByMargin()[0] ?? null);
+
+        return $this->respond(['data' => [
+            'product_id'         => $id,
+            'manual_price'       => $product['sale_price'],
+            'price_status'       => $product['price_status'],
+            'pricing_updated_at' => $product['pricing_updated_at'],
+            'margins'            => $result->pricing?->margins->toArray(),
+            'supplier_offer_id'  => $reference?->offerId,
+            'supplier_name'      => $reference?->supplierName,
+            'pricing'            => $reference?->pricing?->toArray(),
+            'offers'             => array_map(static fn ($e) => [
+                'offer_id'      => $e->offerId,
+                'supplier_name' => $e->supplierName,
+                'eligible'      => $e->isEligible(),
+                'pricing'       => $e->pricing?->toArray(),
+            ], $result->evaluations),
+        ]]);
     }
 }

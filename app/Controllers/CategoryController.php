@@ -66,14 +66,18 @@ class CategoryController extends BaseController
     public function update(int $id): RedirectResponse
     {
         try {
-            $this->service->update($id, $this->request->getPost());
+            $stats = $this->service->update($id, $this->request->getPost());
         } catch (ValidationException $e) {
             return $this->backWithErrors($e->getErrors());
         } catch (BusinessRuleException $e) {
             return redirect()->to('/categories')->with('error', $e->getMessage());
         }
 
-        return redirect()->to('/categories')->with('success', 'Categoria atualizada.');
+        $message = $stats === null
+            ? 'Categoria atualizada.'
+            : sprintf('Categoria atualizada. Preços e seleção recalculados para %d produto(s); %d troca(s) de fornecedor principal.', $stats['evaluated'], $stats['changed']);
+
+        return redirect()->to('/categories')->with('success', $message);
     }
 
     public function delete(int $id): RedirectResponse

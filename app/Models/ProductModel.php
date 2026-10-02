@@ -21,6 +21,7 @@ class ProductModel extends Model
     protected $allowedFields = [
         'sku', 'ean', 'name', 'slug', 'description', 'brand', 'category_id',
         'weight', 'height', 'width', 'length', 'safety_stock', 'active',
+        'desired_margin_percentage', 'minimum_margin_percentage', 'extra_cost', 'sale_price',
     ];
     protected $validationRules = [
         'id'          => 'permit_empty|is_natural_no_zero',
@@ -37,6 +38,10 @@ class ProductModel extends Model
         'length'      => 'permit_empty|decimal|greater_than_equal_to[0]',
         'safety_stock' => 'permit_empty|is_natural|less_than_equal_to[65535]',
         'active'      => 'permit_empty|in_list[0,1]',
+        'desired_margin_percentage' => ['label' => 'Margem desejada', 'rules' => 'permit_empty|decimal|greater_than_equal_to[0]|less_than[100]'],
+        'minimum_margin_percentage' => ['label' => 'Margem mínima', 'rules' => 'permit_empty|decimal|greater_than_equal_to[0]|less_than[100]'],
+        'extra_cost'  => ['label' => 'Custo extra', 'rules' => 'permit_empty|decimal|greater_than_equal_to[0]|less_than[100000]'],
+        'sale_price'  => ['label' => 'Preço de venda', 'rules' => 'permit_empty|decimal|greater_than[0]|less_than[10000000]'],
     ];
     protected $validationMessages = [
         'sku'         => [
@@ -72,7 +77,7 @@ class ProductModel extends Model
     }
 
     /**
-     * @param array{q?: string, sku?: string, ean?: string, brand?: string, category_id?: int|string, status?: string, supplier?: string, selection?: string, stock?: string} $filters
+     * @param array{q?: string, sku?: string, ean?: string, brand?: string, category_id?: int|string, status?: string, supplier?: string, selection?: string, pricing?: string, stock?: string} $filters
      */
     public function applyFilters(array $filters): static
     {
@@ -114,6 +119,14 @@ class ProductModel extends Model
             $this->where('products.selected_offer_id IS NULL', null, false)
                 ->where('EXISTS (' . self::HAS_OFFER_SQL . ')', null, false);
         }
+
+        match ($filters['pricing'] ?? '') {
+            'below_minimum' => $this->where('products.price_status', 'below_minimum'),
+            'invalid'       => $this->where('products.price_status', 'invalid'),
+            'manual'        => $this->where('products.sale_price IS NOT NULL', null, false),
+            'suggested'     => $this->where('products.sale_price IS NULL', null, false)->where('products.suggested_price IS NOT NULL', null, false),
+            default         => null,
+        };
 
         if (($filters['stock'] ?? '') === 'in') {
             $this->where('EXISTS (' . self::HAS_STOCK_SQL . ')', null, false);

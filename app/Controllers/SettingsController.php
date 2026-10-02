@@ -27,7 +27,7 @@ class SettingsController extends BaseController
             return $this->backWithErrors($e->getErrors());
         }
 
-        $affectsSelection = array_filter($changed, static fn (string $key) => preg_match('/^(stock|suppliers|ranking)\./', $key) === 1);
+        $affectsSelection = array_filter($changed, static fn (string $key) => preg_match('/^(pricing|stock|suppliers|ranking)\./', $key) === 1);
 
         if ($affectsSelection === []) {
             return redirect()->to('/settings')->with('success', 'Configurações salvas.');
@@ -36,7 +36,7 @@ class SettingsController extends BaseController
         $stats = service('supplierSelection')->selectAll(SupplierSelectionService::TRIGGER_SETTINGS, $this->auth()->id());
 
         return redirect()->to('/settings')->with('success', sprintf(
-            'Configurações salvas. Seleção de fornecedores recalculada para %d produto(s); %d troca(s) de fornecedor principal.',
+            'Configurações salvas. Seleção de fornecedores e preços recalculados para %d produto(s); %d troca(s) de fornecedor principal.',
             $stats['evaluated'],
             $stats['changed'],
         ));

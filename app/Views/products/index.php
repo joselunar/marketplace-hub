@@ -54,6 +54,15 @@
                 </select>
             </div>
             <div class="col-sm-4 col-lg-2">
+                <label class="form-label" for="pricing">Precificação</label>
+                <select class="form-select form-select-sm" id="pricing" name="pricing">
+                    <option value="">Todas</option>
+                    <?php foreach (['below_minimum' => 'Margem abaixo da mínima', 'manual' => 'Preço fixo', 'suggested' => 'Preço sugerido', 'invalid' => 'Precificação inviável'] as $option => $label): ?>
+                        <option value="<?= $option ?>" <?= ($filters['pricing'] ?? '') === $option ? 'selected' : '' ?>><?= $label ?></option>
+                    <?php endforeach ?>
+                </select>
+            </div>
+            <div class="col-sm-4 col-lg-2">
                 <label class="form-label" for="stock">Estoque</label>
                 <select class="form-select form-select-sm" id="stock" name="stock">
                     <option value="">Todos</option>
@@ -85,6 +94,7 @@
                 <th class="text-end">Menor custo</th>
                 <th class="text-center">Estoque fornecedores</th>
                 <th>Fornecedor selecionado</th>
+                <th class="text-end">Preço / margem</th>
                 <th>Status</th>
                 <th class="text-end">Ações</th>
             </tr>
@@ -111,6 +121,17 @@
                             <?= esc($product['selected_supplier_name']) ?> <span class="text-body-secondary">(<?= score_format($product['selected_score']) ?>)</span>
                         <?php elseif ((int) $product['offers_count'] > 0): ?>
                             <?= badge('Nenhum elegível', 'danger') ?>
+                        <?php else: ?>
+                            <span class="text-body-secondary">—</span>
+                        <?php endif ?>
+                    </td>
+                    <td class="text-end small text-nowrap">
+                        <?php $price = $product['sale_price'] ?? $product['suggested_price']; ?>
+                        <?php if ($price !== null && $product['price_status'] !== null): ?>
+                            <?= money($price) ?><?php if ($product['sale_price'] !== null): ?> <i class="bi bi-pin-angle text-body-secondary" title="Preço fixo"></i><?php endif ?>
+                            <div><?= margin_badge($product['estimated_margin'], $product['price_status']) ?></div>
+                        <?php elseif ($product['price_status'] === 'invalid'): ?>
+                            <?= badge('Inviável', 'danger') ?>
                         <?php else: ?>
                             <span class="text-body-secondary">—</span>
                         <?php endif ?>

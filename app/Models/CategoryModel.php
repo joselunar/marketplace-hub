@@ -10,13 +10,15 @@ class CategoryModel extends Model
     protected $primaryKey     = 'id';
     protected $returnType     = 'array';
     protected $useTimestamps  = true;
-    protected $allowedFields  = ['parent_id', 'name', 'slug', 'description', 'active'];
+    protected $allowedFields  = ['parent_id', 'name', 'slug', 'description', 'desired_margin_percentage', 'minimum_margin_percentage', 'active'];
     protected $validationRules = [
         'id'          => 'permit_empty|is_natural_no_zero',
         'parent_id'   => 'permit_empty|is_natural_no_zero|is_not_unique[categories.id]',
         'name'        => 'required|min_length[2]|max_length[120]',
         'slug'        => 'required|max_length[140]|is_unique[categories.slug,id,{id}]',
         'description' => 'permit_empty|max_length[2000]',
+        'desired_margin_percentage' => ['label' => 'Margem desejada', 'rules' => 'permit_empty|decimal|greater_than_equal_to[0]|less_than[100]'],
+        'minimum_margin_percentage' => ['label' => 'Margem mínima', 'rules' => 'permit_empty|decimal|greater_than_equal_to[0]|less_than[100]'],
         'active'      => 'permit_empty|in_list[0,1]',
     ];
     protected $validationMessages = [
@@ -35,6 +37,38 @@ class CategoryModel extends Model
             ->groupBy('categories.id');
 
         return $this;
+    }
+
+    /**
+     * A categoria e todas as suas descendentes.
+     *
+     * @return list<int>
+     */
+    public function subtreeIds(int $id): array
+    {
+        $rows     = $this->builder()->select('id, parent_id')->get()->getResultArray();
+        $children = [];
+
+        foreach ($rows as $row) {
+            if ($row['parent_id'] !== null) {
+                $children[(int) $row['parent_id']][] = (int) $row['id'];
+            }
+        }
+
+        $ids   = [];
+        $queue = [$id];
+
+        while ($queue !== []) {
+            $current = array_shift($queue);
+
+            if (in_array($current, $ids, true)) {
+                continue;
+            }
+            $ids[] = $current;
+            array_push($queue, ...($children[$current] ?? []));
+        }
+
+        return $ids;
     }
 
     /**

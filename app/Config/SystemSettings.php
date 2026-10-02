@@ -2,6 +2,7 @@
 
 namespace Config;
 
+use App\DTO\Pricing\PricingConfig;
 use CodeIgniter\Config\BaseConfig;
 
 /**
@@ -24,7 +25,7 @@ class SystemSettings extends BaseConfig
     ];
 
     /**
-     * @var array<string, array{group: string, type: string, label: string, default: mixed, rules: string, help?: string}>
+     * @var array<string, array{group: string, type: string, label: string, default: mixed, rules: string, help?: string, options?: array<string, string>}>
      */
     public array $definitions = [
         'pricing.desired_margin_percentage' => [
@@ -33,6 +34,7 @@ class SystemSettings extends BaseConfig
             'label'   => 'Margem desejada (%)',
             'default' => '25.00',
             'rules'   => 'required|decimal|greater_than_equal_to[0]|less_than[100]',
+            'help'    => 'Lucro sobre o preço de venda. Categorias e produtos podem definir a sua.',
         ],
         'pricing.minimum_margin_percentage' => [
             'group'   => 'pricing',
@@ -40,6 +42,7 @@ class SystemSettings extends BaseConfig
             'label'   => 'Margem mínima (%)',
             'default' => '10.00',
             'rules'   => 'required|decimal|greater_than_equal_to[0]|less_than[100]',
+            'help'    => 'Preços abaixo dela são recusados e ofertas que não a atingem ficam inelegíveis.',
         ],
         'pricing.estimated_tax_percentage' => [
             'group'   => 'pricing',
@@ -47,6 +50,55 @@ class SystemSettings extends BaseConfig
             'label'   => 'Imposto estimado (%)',
             'default' => '6.00',
             'rules'   => 'required|decimal|greater_than_equal_to[0]|less_than[100]',
+            'help'    => 'Sobre o preço de venda (ex.: alíquota do Simples Nacional).',
+        ],
+        'pricing.marketplace_fee_percentage' => [
+            'group'   => 'pricing',
+            'type'    => 'decimal',
+            'label'   => 'Comissão do marketplace (%)',
+            'default' => '0.00',
+            'rules'   => 'required|decimal|greater_than_equal_to[0]|less_than[100]',
+            'help'    => 'Preencha com o valor da tabela oficial de tarifas do marketplace para o tipo de anúncio usado.',
+        ],
+        'pricing.marketplace_fixed_fee' => [
+            'group'   => 'pricing',
+            'type'    => 'decimal',
+            'label'   => 'Tarifa fixa do marketplace por unidade (R$)',
+            'default' => '0.00',
+            'rules'   => 'required|decimal|greater_than_equal_to[0]|less_than[100000]',
+        ],
+        'pricing.marketplace_fixed_fee_threshold' => [
+            'group'   => 'pricing',
+            'type'    => 'decimal',
+            'label'   => 'Tarifa fixa cobrada abaixo de (R$)',
+            'default' => '0.00',
+            'rules'   => 'required|decimal|greater_than_equal_to[0]|less_than[10000000]',
+            'help'    => 'A tarifa fixa só se aplica a vendas com preço abaixo deste valor. Use 0 para cobrar sempre.',
+        ],
+        'pricing.extra_cost_percentage' => [
+            'group'   => 'pricing',
+            'type'    => 'decimal',
+            'label'   => 'Custos extras sobre o preço (%)',
+            'default' => '0.00',
+            'rules'   => 'required|decimal|greater_than_equal_to[0]|less_than[100]',
+            'help'    => 'Ex.: antecipação de recebíveis, reserva para devoluções.',
+        ],
+        'pricing.extra_fixed_cost' => [
+            'group'   => 'pricing',
+            'type'    => 'decimal',
+            'label'   => 'Custos extras por unidade (R$)',
+            'default' => '0.00',
+            'rules'   => 'required|decimal|greater_than_equal_to[0]|less_than[100000]',
+            'help'    => 'Ex.: embalagem e etiqueta. Produtos podem somar um custo extra próprio.',
+        ],
+        'pricing.rounding' => [
+            'group'   => 'pricing',
+            'type'    => 'string',
+            'label'   => 'Arredondamento do preço sugerido',
+            'default' => 'ending_90',
+            'rules'   => 'required|in_list[cents,ending_90,ending_99,integer]',
+            'options' => PricingConfig::ROUNDING_OPTIONS,
+            'help'    => 'Sempre para cima, para não reduzir a margem.',
         ],
         'stock.safety_quantity' => [
             'group'   => 'stock',

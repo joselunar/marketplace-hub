@@ -45,6 +45,9 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
         $routes->post('(:num)/delete', 'ProductController::delete/$1', ['filter' => 'role:admin']);
     });
 
+    $routes->get('pricing', 'PricingController::index');
+    $routes->get('pricing/simulate', 'PricingController::simulate');
+
     $routes->group('offers', static function (RouteCollection $routes): void {
         $routes->get('/', 'SupplierOfferController::index');
         $routes->get('new', 'SupplierOfferController::new');
@@ -84,6 +87,8 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api', 'filter' => 'auth']
     $routes->get('products/(:num)', 'ProductController::show/$1');
     $routes->get('products/(:num)/offers', 'ProductController::offers/$1');
     $routes->get('products/(:num)/selection', 'ProductController::selection/$1');
+    $routes->get('products/(:num)/pricing', 'ProductController::pricing/$1');
+    $routes->get('pricing/simulate', 'PricingController::simulate');
     $routes->get('suppliers', 'SupplierController::index');
     $routes->get('suppliers/(:num)', 'SupplierController::show/$1');
 });

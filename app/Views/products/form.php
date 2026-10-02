@@ -99,6 +99,34 @@ $active = old('active') ?? ($product['active'] ?? 1);
                 </div>
             </div>
 
+            <div class="card mb-3">
+                <div class="card-header bg-white fw-semibold">Precificação</div>
+                <div class="card-body row g-3">
+                    <?php
+                    $pricingFields = [
+                        'sale_price'                => ['Preço de venda fixo (R$)', 'Vazio = usa o preço sugerido pelo cálculo. Preços que não atingem a margem mínima com nenhum fornecedor são recusados.'],
+                        'desired_margin_percentage' => ['Margem desejada (%)', null],
+                        'minimum_margin_percentage' => ['Margem mínima (%)', null],
+                        'extra_cost'                => ['Custo extra por unidade (R$)', 'Somado aos custos extras globais (ex.: embalagem especial).'],
+                    ];
+                    ?>
+                    <?php foreach ($pricingFields as $field => [$label, $help]): ?>
+                        <div class="<?= in_array($field, ['desired_margin_percentage', 'minimum_margin_percentage'], true) ? 'col-6' : 'col-12' ?>">
+                            <label for="<?= $field ?>" class="form-label"><?= $label ?></label>
+                            <input type="text" inputmode="decimal" class="form-control<?= invalid_class($field) ?>" id="<?= $field ?>" name="<?= $field ?>"
+                                   value="<?= esc(old($field) !== null ? (string) old($field) : decimal_br($product[$field] ?? null), 'attr') ?>">
+                            <?php if ($help !== null): ?>
+                                <div class="form-text"><?= esc($help) ?></div>
+                            <?php endif ?>
+                            <div class="invalid-feedback"><?= esc(field_error($field) ?? '') ?></div>
+                        </div>
+                        <?php if ($field === 'minimum_margin_percentage'): ?>
+                            <div class="col-12 form-text mt-1">Margens vazias herdam da categoria (ou da categoria pai) e, por fim, da configuração global.</div>
+                        <?php endif ?>
+                    <?php endforeach ?>
+                </div>
+            </div>
+
             <div class="card">
                 <div class="card-header bg-white fw-semibold">Peso e dimensões (embalado)</div>
                 <div class="card-body row g-3">

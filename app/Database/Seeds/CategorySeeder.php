@@ -16,6 +16,17 @@ class CategorySeeder extends Seeder
         'Informática' => ['Periféricos', 'Cabos e adaptadores'],
     ];
 
+    /**
+     * Margens de demonstração (desejada, mínima). As demais categorias herdam
+     * da categoria pai ou da configuração global.
+     *
+     * @var array<string, array{0: string|null, 1: string|null}>
+     */
+    private const MARGINS = [
+        'Informática' => ['20.00', null],
+        'Áudio'       => ['30.00', '12.00'],
+    ];
+
     public function run(): void
     {
         $model = new CategoryModel();
@@ -38,7 +49,16 @@ class CategorySeeder extends Seeder
             return (int) $existing['id'];
         }
 
-        $model->skipValidation(true)->insert(['name' => $name, 'slug' => $slug, 'parent_id' => $parentId, 'active' => 1]);
+        [$desired, $minimum] = self::MARGINS[$name] ?? [null, null];
+
+        $model->skipValidation(true)->insert([
+            'name'                      => $name,
+            'slug'                      => $slug,
+            'parent_id'                 => $parentId,
+            'desired_margin_percentage' => $desired,
+            'minimum_margin_percentage' => $minimum,
+            'active'                    => 1,
+        ]);
 
         return (int) $model->getInsertID();
     }

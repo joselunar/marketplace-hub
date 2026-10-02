@@ -62,6 +62,8 @@ class ProductService
 
         $currentImages = array_column($this->images->forProduct($id), 'url');
 
+        $this->guardManualPrice($id, $data);
+
         $db = $this->products->db;
         $db->transException(true)->transStart();
 
@@ -82,11 +84,63 @@ class ProductService
             $data + ['images' => implode("\n", $images)],
         );
 
-        $safety = static fn (mixed $value): ?string => $value === null ? null : (string) $value;
-
-        if ($safety($current['safety_stock'] ?? null) !== $safety($data['safety_stock'] ?? null)) {
+        if ($this->affectsSelection($current, $data)) {
             $this->selection()->select($id, SupplierSelectionService::TRIGGER_PRODUCT);
         }
+    }
+
+    /**
+     * Recusa um preço manual com o qual nenhuma oferta atinge a margem mínima.
+     * Se ao menos um fornecedor a atinge, o motor de seleção passa a usá-lo.
+     */
+    private function guardManualPrice(int $id, array $data): void
+    {
+        $price = $data['sale_price'] ?? null;
+
+        if ($price === null || ! is_numeric($price) || bccomp((string) $price, '0', 2) <= 0) {
+            return;
+        }
+
+        foreach (['desired_margin_percentage', 'minimum_margin_percentage', 'extra_cost'] as $field) {
+            if (($data[$field] ?? null) !== null && ! is_numeric($data[$field])) {
+                return;
+            }
+        }
+
+        $preview = $this->selection()->evaluate($id, $data);
+        $blocked = $preview->blockedOnlyByMargin();
+
+        if ($preview->primary() !== null || $blocked === []) {
+            return;
+        }
+
+        usort($blocked, static fn ($a, $b) => bccomp((string) $a->pricing->minimumPrice, (string) $b->pricing->minimumPrice, 2));
+        $best = $blocked[0];
+
+        throw new ValidationException([
+            'sale_price' => sprintf(
+                'Com o preço de R$ %s a margem fica em %s%%, abaixo da mínima de %s%%. Preço mínimo: R$ %s (com %s).',
+                number_format((float) $price, 2, ',', '.'),
+                number_format((float) $best->pricing->marginPercentage, 1, ',', '.'),
+                number_format((float) $best->pricing->margins->minimum, 1, ',', '.'),
+                number_format((float) $best->pricing->minimumPrice, 2, ',', '.'),
+                $best->supplierName,
+            ),
+        ]);
+    }
+
+    private function affectsSelection(array $current, array $data): bool
+    {
+        $normalize = static fn (mixed $value): ?string => $value === null || $value === '' ? null
+            : (is_numeric($value) ? rtrim(rtrim(number_format((float) $value, 4, '.', ''), '0'), '.') : (string) $value);
+
+        foreach (SupplierSelectionService::PRODUCT_FIELDS as $field) {
+            if ($normalize($current[$field] ?? null) !== $normalize($data[$field] ?? null)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -127,7 +181,10 @@ class ProductService
 
     private function prepare(array $input, ?int $id = null, ?string $currentSlug = null): array
     {
-        $data = Input::only($input, ['sku', 'ean', 'name', 'description', 'brand', 'category_id', 'weight', 'height', 'width', 'length', 'safety_stock']);
+        $data = Input::only($input, [
+            'sku', 'ean', 'name', 'description', 'brand', 'category_id', 'weight', 'height', 'width', 'length', 'safety_stock',
+            'desired_margin_percentage', 'minimum_margin_percentage', 'extra_cost', 'sale_price',
+        ]);
 
         $data['sku']         = isset($data['sku']) ? strtoupper($data['sku']) : '';
         $data['name']        = $data['name'] ?? '';
@@ -139,6 +196,17 @@ class ProductService
             $data[$field] = $this->decimalOrRaw($data[$field] ?? null, 2);
         }
         $data['weight'] = $this->decimalOrRaw($data['weight'] ?? null, 3);
+
+        foreach (['desired_margin_percentage', 'minimum_margin_percentage', 'extra_cost', 'sale_price'] as $field) {
+            $data[$field] = $this->decimalOrRaw($data[$field] ?? null, 2);
+        }
+
+        $desired = $data['desired_margin_percentage'];
+        $minimum = $data['minimum_margin_percentage'];
+
+        if (is_numeric($desired) && is_numeric($minimum) && bccomp((string) $minimum, (string) $desired, 2) > 0) {
+            throw new ValidationException(['minimum_margin_percentage' => 'A margem mínima não pode ser maior que a margem desejada.']);
+        }
 
         $data['slug'] = $this->uniqueSlug($data['name'], $id, $currentSlug);
 

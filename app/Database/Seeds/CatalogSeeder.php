@@ -12,8 +12,9 @@ use App\Support\Input;
 use CodeIgniter\Database\Seeder;
 
 /**
- * Produtos fictícios com ofertas variadas para exercitar o ranking de fornecedores:
- * preço menor x estoque baixo, prazo, produto sem fornecedor, sem estoque e oferta sem vínculo.
+ * Produtos fictícios com ofertas variadas para exercitar o ranking de fornecedores
+ * e a precificação: preço menor x estoque baixo, prazo, produto sem fornecedor,
+ * sem estoque, oferta sem vínculo e preços fixos com e sem margem suficiente.
  */
 class CatalogSeeder extends Seeder
 {
@@ -21,6 +22,8 @@ class CatalogSeeder extends Seeder
         [
             'sku' => 'FONE-LP40', 'ean' => '7890000000017', 'name' => 'Fone Bluetooth Lenovo LP40', 'brand' => 'Lenovo',
             'category' => 'audio', 'weight' => '0.150', 'height' => '10', 'width' => '8', 'length' => '4', 'active' => 1,
+            // Com este preço fixo a oferta da Gamma não atinge a margem mínima de Áudio; a Beta atinge.
+            'sale_price' => '95.90',
             'offers' => [
                 'Distribuidora Alpha' => ['sku' => 'ABC123', 'cost' => '49.00', 'stock' => 0, 'shipping' => '8.00', 'days' => null],
                 'Fornecedor Beta'     => ['sku' => 'LNV991', 'cost' => '53.00', 'stock' => 28, 'shipping' => '9.50', 'days' => null],
@@ -47,6 +50,8 @@ class CatalogSeeder extends Seeder
         [
             'sku' => 'CARR-USBC-20W', 'ean' => '7890000000048', 'name' => 'Carregador USB-C 20W Turbo', 'brand' => 'VoltPlus',
             'category' => 'acessorios-para-celular', 'weight' => '0.080', 'height' => '6', 'width' => '5', 'length' => '4', 'active' => 1,
+            // Preço fixo antigo, que não cobre mais tarifas e impostos: aparece como margem abaixo da mínima.
+            'sale_price' => '39.90',
             'offers' => [
                 'Fornecedor Beta' => ['sku' => 'BT-CHG20', 'cost' => '25.00', 'stock' => 300, 'shipping' => '5.00', 'days' => null],
             ],
@@ -115,6 +120,7 @@ class CatalogSeeder extends Seeder
                 'width'       => $data['width'],
                 'length'      => $data['length'],
                 'safety_stock' => $data['safety_stock'] ?? null,
+                'sale_price'  => $data['sale_price'] ?? null,
                 'active'      => $data['active'],
             ]);
             $productId = (int) $products->getInsertID();

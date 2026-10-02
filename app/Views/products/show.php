@@ -54,6 +54,8 @@
 
 <?= $this->include('products/_selection') ?>
 
+<?= $this->include('products/_pricing') ?>
+
 <div class="card mb-3">
     <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
         <span>Ofertas dos fornecedores</span>
@@ -69,6 +71,7 @@
                 <th class="text-center">Estoque</th>
                 <th class="text-end">Frete</th>
                 <th class="text-center">Prazo</th>
+                <th class="text-end" title="Preço de venda com o custo desta oferta e a margem resultante">Preço / margem</th>
                 <th>Última atualização</th>
                 <th>Status</th>
                 <th class="text-center">Score</th>
@@ -99,6 +102,14 @@
                     </td>
                     <td class="text-end text-nowrap small"><?= money($offer['shipping_cost']) ?></td>
                     <td class="text-center small"><?= $days !== null ? (int) $days . ' d' : '—' ?></td>
+                    <td class="text-end small text-nowrap">
+                        <?php if ($evaluation?->pricing !== null): ?>
+                            <?= money($evaluation->pricing->price) ?>
+                            <div><?= margin_badge($evaluation->pricing->marginPercentage, $evaluation->pricing->isBelowMinimum() ? 'below_minimum' : 'ok') ?></div>
+                        <?php else: ?>
+                            <span class="text-body-secondary">—</span>
+                        <?php endif ?>
+                    </td>
                     <td class="small"><?= format_datetime($offer['last_sync_at'] ?? $offer['updated_at']) ?></td>
                     <td>
                         <?= active_badge($offer['active']) ?>
@@ -110,7 +121,7 @@
                         <?php if ($evaluation?->isEligible()): ?>
                             <span class="fw-semibold"><?= score_format($evaluation->score) ?></span>
                         <?php elseif ($evaluation !== null): ?>
-                            <span class="text-body-secondary small" title="<?= esc(implode('; ', $evaluation->ineligibilityReasons), 'attr') ?>"><i class="bi bi-slash-circle"></i> <?= esc($evaluation->ineligibilityReasons[0]) ?></span>
+                            <span class="text-body-secondary small" title="<?= esc(implode('; ', $evaluation->ineligibilityReasons), 'attr') ?>"><i class="bi bi-slash-circle"></i> <?= esc(mb_strimwidth($evaluation->ineligibilityReasons[0], 0, 38, '…')) ?></span>
                         <?php else: ?>
                             <span class="text-body-secondary">—</span>
                         <?php endif ?>

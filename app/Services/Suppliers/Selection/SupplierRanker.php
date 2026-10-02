@@ -2,17 +2,22 @@
 
 namespace App\Services\Suppliers\Selection;
 
+use App\DTO\Pricing\CostInput;
+use App\DTO\Pricing\PricingContext;
 use App\DTO\Suppliers\OfferEvaluation;
 use App\DTO\Suppliers\RankingConfig;
 use App\DTO\Suppliers\SelectionResult;
 use App\Enums\SupplierStatus;
+use App\Services\Pricing\PriceCalculator;
+use App\Services\Pricing\PricingException;
 
 /**
  * Cálculo do ranking de ofertas de um produto. Não acessa o banco: recebe
  * os dados prontos, o que permite testar as regras isoladamente.
  *
  * 1. Critérios eliminatórios (fornecedor inativo/bloqueado, oferta inativa ou
- *    bloqueada, custo inválido, sem estoque disponível, prazo acima do limite).
+ *    bloqueada, custo inválido, sem estoque disponível, prazo acima do limite,
+ *    margem mínima não atingida).
  * 2. Nota de 0 a 100 por critério entre as ofertas elegíveis.
  * 3. Score final = média das notas ponderada pelos pesos configurados.
  */
@@ -23,14 +28,20 @@ class SupplierRanker
      */
     public const DEFAULT_RELIABILITY = 100.0;
 
+    public function __construct(
+        private readonly PriceCalculator $calculator = new PriceCalculator(),
+    ) {
+    }
+
     /**
      * @param array{id: int|string, safety_stock?: int|string|null} $product
      * @param list<array<string, mixed>>                            $offers      linhas de supplier_offers com os dados do fornecedor
      * @param array<int, array{score: float, total: int, errors: int, warnings: int}> $reliability por supplier_id
+     * @param PricingContext|null                                   $pricing     sem contexto, o critério de margem não é aplicado
      */
-    public function rank(array $product, array $offers, RankingConfig $config, array $reliability = []): SelectionResult
+    public function rank(array $product, array $offers, RankingConfig $config, array $reliability = [], ?PricingContext $pricing = null): SelectionResult
     {
-        $prepared = array_map(fn (array $offer) => $this->prepare($product, $offer, $config), $offers);
+        $prepared = array_map(fn (array $offer) => $this->prepare($product, $offer, $config, $pricing), $offers);
         $eligible = array_values(array_filter($prepared, static fn (array $p) => $p['reasons'] === []));
 
         $minCost      = $this->minCost($eligible);
@@ -59,7 +70,7 @@ class SupplierRanker
             }
         }
 
-        return new SelectionResult((int) $product['id'], $evaluations, $config);
+        return new SelectionResult((int) $product['id'], $evaluations, $config, $pricing);
     }
 
     /**
@@ -80,7 +91,7 @@ class SupplierRanker
         return [$config->globalSafetyStock, OfferEvaluation::SAFETY_SOURCE_GLOBAL];
     }
 
-    private function prepare(array $product, array $offer, RankingConfig $config): array
+    private function prepare(array $product, array $offer, RankingConfig $config, ?PricingContext $pricing): array
     {
         $cost     = is_numeric($offer['cost_price'] ?? null) ? bcadd((string) $offer['cost_price'], '0', 2) : '0.00';
         $shipping = is_numeric($offer['shipping_cost'] ?? null) ? bcadd((string) $offer['shipping_cost'], '0', 2) : '0.00';
@@ -127,6 +138,18 @@ class SupplierRanker
             $reasons[] = sprintf('Prazo de %d dias acima do limite de %d', $days, $config->maxShippingDays);
         }
 
+        $breakdown     = null;
+        $marginBlocked = false;
+
+        if ($pricing !== null && bccomp($cost, '0', 2) > 0) {
+            [$breakdown, $marginReason] = $this->price($cost, $shipping, $pricing);
+
+            if ($marginReason !== null) {
+                $reasons[]     = $marginReason;
+                $marginBlocked = true;
+            }
+        }
+
         return [
             'offer_id'      => (int) $offer['id'],
             'supplier_id'   => (int) $offer['supplier_id'],
@@ -142,7 +165,42 @@ class SupplierRanker
             'available'     => $available,
             'days'          => $days,
             'reasons'       => $reasons,
+            'pricing'       => $breakdown,
+            'margin_blocked' => $marginBlocked,
         ];
+    }
+
+    /**
+     * Preço da oferta (manual do produto ou sugerido) e, se houver, o motivo
+     * de inelegibilidade por margem.
+     *
+     * @return array{0: \App\DTO\Pricing\PriceBreakdown|null, 1: string|null}
+     */
+    private function price(string $cost, string $shipping, PricingContext $pricing): array
+    {
+        $costs = new CostInput($cost, $shipping, $pricing->productExtraCost);
+
+        try {
+            if (! $pricing->hasManualPrice()) {
+                return [$this->calculator->suggest($costs, $pricing->margins, $pricing->config), null];
+            }
+
+            $breakdown = $this->calculator->at($pricing->manualPrice, $costs, $pricing->margins, $pricing->config);
+        } catch (PricingException $e) {
+            return [null, 'Precificação inviável: ' . $e->getMessage()];
+        }
+
+        if (! $breakdown->isBelowMinimum()) {
+            return [$breakdown, null];
+        }
+
+        return [$breakdown, sprintf(
+            'Margem de %s%% no preço de %s, abaixo da mínima de %s%% (preço mínimo %s)',
+            $this->percent($breakdown->marginPercentage),
+            $this->money($breakdown->price),
+            $this->percent($pricing->margins->minimum),
+            $this->money((string) $breakdown->minimumPrice),
+        )];
     }
 
     /**
@@ -223,6 +281,8 @@ class SupplierRanker
             ineligibilityReasons: $item['reasons'],
             criteria: $criteria,
             score: $score,
+            pricing: $item['pricing'],
+            marginBlocked: $item['margin_blocked'],
         );
     }
 
@@ -277,5 +337,10 @@ class SupplierRanker
     private function money(string $value): string
     {
         return 'R$ ' . number_format((float) $value, 2, ',', '.');
+    }
+
+    private function percent(string $value): string
+    {
+        return number_format((float) $value, 1, ',', '.');
     }
 }

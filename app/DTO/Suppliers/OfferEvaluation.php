@@ -2,6 +2,8 @@
 
 namespace App\DTO\Suppliers;
 
+use App\DTO\Pricing\PriceBreakdown;
+
 /**
  * Resultado da avaliação de uma oferta pelo motor de seleção.
  */
@@ -36,12 +38,22 @@ final class OfferEvaluation
         public readonly array $ineligibilityReasons,
         public readonly array $criteria = [],
         public readonly ?float $score = null,
+        public readonly ?PriceBreakdown $pricing = null,
+        public readonly bool $marginBlocked = false,
     ) {
     }
 
     public function isEligible(): bool
     {
         return $this->ineligibilityReasons === [];
+    }
+
+    /**
+     * A oferta só ficou de fora por não atingir a margem mínima.
+     */
+    public function blockedOnlyByMargin(): bool
+    {
+        return $this->marginBlocked && count($this->ineligibilityReasons) === 1;
     }
 
     public function positionLabel(): string
@@ -97,6 +109,7 @@ final class OfferEvaluation
             'rank'                  => $this->rank,
             'position'              => $this->positionLabel(),
             'criteria'              => $this->criteria,
+            'pricing'               => $this->pricing?->toArray(),
         ];
     }
 }

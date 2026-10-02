@@ -34,6 +34,21 @@ $active = old('active') ?? ($category['active'] ?? 1);
                 <div class="invalid-feedback"><?= esc(field_error('description') ?? '') ?></div>
             </div>
 
+            <fieldset class="mb-3">
+                <legend class="form-label fs-6 fw-semibold mb-2">Margens da categoria</legend>
+                <div class="row g-3">
+                    <?php foreach (['desired_margin_percentage' => 'Margem desejada (%)', 'minimum_margin_percentage' => 'Margem mínima (%)'] as $field => $label): ?>
+                        <div class="col-sm-6">
+                            <label for="<?= $field ?>" class="form-label"><?= $label ?></label>
+                            <input type="text" inputmode="decimal" class="form-control<?= invalid_class($field) ?>" id="<?= $field ?>" name="<?= $field ?>"
+                                   value="<?= esc(old($field) !== null ? (string) old($field) : decimal_br($category[$field] ?? null), 'attr') ?>">
+                            <div class="invalid-feedback"><?= esc(field_error($field) ?? '') ?></div>
+                        </div>
+                    <?php endforeach ?>
+                </div>
+                <div class="form-text">Vazio = herda da categoria pai ou da configuração global. Subcategorias e produtos sem margem própria usam estes valores.</div>
+            </fieldset>
+
             <div class="form-check form-switch mb-4">
                 <input type="hidden" name="active" value="0">
                 <input class="form-check-input" type="checkbox" role="switch" id="active" name="active" value="1" <?= (int) $active === 1 ? 'checked' : '' ?>>

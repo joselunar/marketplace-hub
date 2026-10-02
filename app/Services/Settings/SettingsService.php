@@ -119,6 +119,7 @@ class SettingsService
         }
 
         $this->guardMarginConsistency($data);
+        $this->guardPricingFeasible($data);
         $this->guardRankingWeights($data, $definitions);
 
         $current = $this->all();
@@ -192,6 +193,28 @@ class SettingsService
         if ($desired !== null && $minimum !== null && bccomp((string) $minimum, (string) $desired, 2) > 0) {
             throw new ValidationException([
                 'pricing.minimum_margin_percentage' => 'A margem mínima não pode ser maior que a margem desejada.',
+            ]);
+        }
+    }
+
+    /**
+     * Comissão, impostos, custos extras e margem incidem sobre o preço; se
+     * somarem 100% ou mais, nenhum preço cobre os custos.
+     */
+    private function guardPricingFeasible(array $data): void
+    {
+        $total = '0';
+
+        foreach (['marketplace_fee_percentage', 'estimated_tax_percentage', 'extra_cost_percentage', 'desired_margin_percentage'] as $key) {
+            $total = bcadd($total, (string) ($data[$this->fieldName('pricing.' . $key)] ?? '0'), 2);
+        }
+
+        if (bccomp($total, '100', 2) >= 0) {
+            throw new ValidationException([
+                'pricing.desired_margin_percentage' => sprintf(
+                    'Comissão, impostos, custos extras e margem desejada somam %s%%; precisam ficar abaixo de 100%%.',
+                    number_format((float) $total, 2, ',', '.'),
+                ),
             ]);
         }
     }

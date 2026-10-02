@@ -42,6 +42,18 @@ $cards = [
                         <a href="<?= site_url('products?status=active&selection=none') ?>" class="btn btn-sm btn-outline-secondary">Ver</a>
                     </li>
                 <?php endif ?>
+                <?php if ($summary['productsBelowMinimumMargin'] > 0): ?>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-graph-down-arrow text-danger me-2"></i><?= $summary['productsBelowMinimumMargin'] ?> produto(s) ativo(s) com margem abaixo da mínima no preço fixo</span>
+                        <a href="<?= site_url('products?status=active&pricing=below_minimum') ?>" class="btn btn-sm btn-outline-secondary">Ver</a>
+                    </li>
+                <?php endif ?>
+                <?php if ($summary['productsWithInvalidPricing'] > 0): ?>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-calculator text-danger me-2"></i><?= $summary['productsWithInvalidPricing'] ?> produto(s) ativo(s) sem preço possível (taxas e margem somam 100% ou mais)</span>
+                        <a href="<?= site_url('products?status=active&pricing=invalid') ?>" class="btn btn-sm btn-outline-secondary">Ver</a>
+                    </li>
+                <?php endif ?>
                 <?php if ($summary['unlinkedOffers'] > 0): ?>
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                         <span><i class="bi bi-link-45deg text-info me-2"></i><?= $summary['unlinkedOffers'] ?> oferta(s) importada(s) sem vínculo com o catálogo</span>
@@ -57,7 +69,8 @@ $cards = [
                         <div class="small text-body-secondary mt-1"><?= esc($log['message']) ?></div>
                     </li>
                 <?php endforeach ?>
-                <?php if ($summary['productsWithoutOffer'] === 0 && $summary['productsWithoutEligibleSupplier'] === 0 && $summary['unlinkedOffers'] === 0 && $summary['recentSyncErrors'] === []): ?>
+                <?php if ($summary['productsWithoutOffer'] === 0 && $summary['productsWithoutEligibleSupplier'] === 0 && $summary['productsBelowMinimumMargin'] === 0
+                    && $summary['productsWithInvalidPricing'] === 0 && $summary['unlinkedOffers'] === 0 && $summary['recentSyncErrors'] === []): ?>
                     <li class="list-group-item text-body-secondary small"><i class="bi bi-check-circle text-success me-1"></i> Nenhum alerta no momento.</li>
                 <?php endif ?>
             </ul>
@@ -88,7 +101,6 @@ $cards = [
             <div class="card-body small text-body-secondary">
                 <p class="mb-2">Indicadores de anúncios, pedidos, faturamento, lucro e margem serão exibidos aqui conforme os módulos forem entregues:</p>
                 <ul class="mb-0">
-                    <li>Precificação e margens (Fase 4)</li>
                     <li>Mercado Livre: conexão OAuth, anúncios e pedidos (Fases 5 a 7)</li>
                     <li>Jobs de sincronização e dashboard completo (Fase 8)</li>
                 </ul>

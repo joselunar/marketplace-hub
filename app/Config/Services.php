@@ -4,6 +4,7 @@ namespace Config;
 
 use App\Services\Audit\AuditService;
 use App\Services\Auth\AuthService;
+use App\Services\Pricing\PricingService;
 use App\Services\Settings\SettingsService;
 use App\Services\Suppliers\SupplierSelectionService;
 use CodeIgniter\Config\BaseService;
@@ -43,6 +44,15 @@ class Services extends BaseService
         }
 
         return new SettingsService();
+    }
+
+    public static function pricing(bool $getShared = true): PricingService
+    {
+        if ($getShared) {
+            return static::getSharedInstance('pricing');
+        }
+
+        return new PricingService();
     }
 
     public static function supplierSelection(bool $getShared = true): SupplierSelectionService

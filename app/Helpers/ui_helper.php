@@ -147,6 +147,29 @@ if (! function_exists('selection_position_badge')) {
     }
 }
 
+if (! function_exists('percent_format')) {
+    function percent_format(float|string|null $value, int $decimals = 1, string $empty = '—'): string
+    {
+        return $value === null || $value === '' ? $empty : number_format((float) $value, $decimals, ',', '.') . '%';
+    }
+}
+
+if (! function_exists('margin_badge')) {
+    /**
+     * Margem estimada com destaque quando fica abaixo da mínima.
+     */
+    function margin_badge(float|string|null $margin, ?string $status = null): string
+    {
+        if ($margin === null || $margin === '') {
+            return '<span class="text-body-secondary">—</span>';
+        }
+
+        return $status === SupplierSelectionService::PRICE_STATUS_BELOW_MINIMUM
+            ? badge('Margem baixa ' . percent_format($margin), 'danger')
+            : '<span class="fw-semibold">' . esc(percent_format($margin)) . '</span>';
+    }
+}
+
 if (! function_exists('selection_trigger_label')) {
     function selection_trigger_label(string $trigger): string
     {

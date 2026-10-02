@@ -15,7 +15,7 @@ O catálogo é **interno e único**: um produto (SKU interno) pode receber ofert
 - Publicar e sincronizar anúncios no Mercado Livre e, depois, em outros marketplaces.
 - Manter auditoria completa das alterações e das sincronizações.
 
-Status atual: **Fases 1, 2 e 3 concluídas** (base, autenticação, fornecedores, catálogo, ofertas, importação CSV e motor de seleção de fornecedores). Veja o [ROADMAP](ROADMAP.md).
+Status atual: **Fases 1 a 4 concluídas** (base, autenticação, fornecedores, catálogo, ofertas, importação CSV, motor de seleção de fornecedores e precificação). Veja o [ROADMAP](ROADMAP.md).
 
 ## Arquitetura
 
@@ -30,7 +30,7 @@ app/
 ├── Database/
 │   ├── Migrations/    # Toda a estrutura do banco
 │   └── Seeds/         # Dados de desenvolvimento
-├── DTO/               # Objetos de transferência (ex.: dados vindos de fornecedores)
+├── DTO/               # Objetos de transferência (fornecedores, ranking, precificação)
 ├── Enums/             # Papéis, status e tipos de integração
 ├── Exceptions/        # ValidationException, BusinessRuleException
 ├── Filters/           # auth, guest, role, throttle de login
@@ -41,6 +41,7 @@ app/
 │   ├── Auth/
 │   ├── Catalog/       # Categorias e produtos
 │   ├── Dashboard/
+│   ├── Pricing/       # Calculador de preço e resolução de margens
 │   ├── Settings/
 │   ├── Suppliers/     # Fornecedores, ofertas, importação, conectores e motor de seleção
 │   └── Users/
@@ -57,6 +58,8 @@ Decisões principais:
 - **Configurações no banco** (`settings`), com catálogo tipado em `Config\SystemSettings`. Margens, estoque de segurança e pesos de ranking não ficam fixos no código.
 - **Auditoria** de toda criação, alteração e exclusão, com remoção automática de campos sensíveis (senhas, tokens, segredos).
 - **Motor de seleção separado em duas partes**: `SupplierRanker` faz só o cálculo (sem banco, testável isoladamente) e `SupplierSelectionService` carrega os dados, grava o resultado e registra as trocas.
+- **Precificação no mesmo padrão**: `PriceCalculator` é puro e `PricingService` resolve margens e parâmetros. O motor de seleção usa o calculador para aplicar a margem mínima a cada oferta e grava o preço do fornecedor escolhido, então seleção e preço nunca ficam dessincronizados.
+- **Tarifas de marketplace são configuração**, não código. Hoje são preenchidas em **Configurações** a partir da tabela oficial; a consulta automática à API de tarifas do Mercado Livre entra com a integração (Fase 6).
 
 ## Stack
 
@@ -125,9 +128,9 @@ GRANT ALL PRIVILEGES ON marketplace_hub_test.* TO 'marketplace'@'localhost';
 | `settings` | Configurações do sistema |
 | `audit_logs` | Auditoria de alterações (valores antigos/novos em JSON) |
 | `sync_logs` | Registro de sincronizações e importações |
-| `categories` | Categorias hierárquicas |
+| `categories` | Categorias hierárquicas, com margens próprias opcionais |
 | `suppliers` | Fornecedores |
-| `products` | Catálogo interno (SKU, EAN, dimensões, peso) |
+| `products` | Catálogo interno (SKU, EAN, dimensões, peso, margens, preço fixo e o último preço calculado) |
 | `product_images` | Imagens dos produtos |
 | `supplier_offers` | Ofertas dos fornecedores (custo, estoque, frete, prazo, bloqueio manual e resultado da última avaliação) |
 | `supplier_imports` | Histórico de importações de arquivos |
@@ -148,7 +151,9 @@ php spark migrate:refresh     # recria tudo (apaga os dados)
 php spark db:seed DevelopmentSeeder
 ```
 
-O `DevelopmentSeeder` cria configurações padrão, usuários admin e operador, categorias, 3 fornecedores, 8 produtos e ofertas de exemplo (incluindo produto sem oferta, produto sem estoque, produto inativo, oferta sem vínculo, oferta bloqueada, fornecedor e produto com estoque de segurança próprio) e já calcula a seleção de fornecedores. Ele se recusa a rodar com `CI_ENVIRONMENT=production`.
+O `DevelopmentSeeder` cria configurações padrão, usuários admin e operador, categorias, 3 fornecedores, 8 produtos e ofertas de exemplo (incluindo produto sem oferta, produto sem estoque, produto inativo, oferta sem vínculo, oferta bloqueada, fornecedor e produto com estoque de segurança próprio, categorias com margem própria e produtos com preço fixo dentro e abaixo da margem mínima) e já calcula seleção e preços. Ele se recusa a rodar com `CI_ENVIRONMENT=production`.
+
+Para a demonstração exibir todos os componentes do preço, o seeder preenche tarifas **fictícias** (comissão de 14%, tarifa fixa de R$ 6,00 abaixo de R$ 79,00 e R$ 1,50 de embalagem), apenas se as tarifas ainda estiverem zeradas. Em uso real, ajuste esses valores em **Configurações** conforme a tabela oficial do marketplace.
 
 Para popular só as configurações padrão (útil em produção):
 
@@ -164,7 +169,7 @@ php spark serve --port 8080
 
 Acesse <http://localhost:8080> e entre com o e-mail e a senha definidos em `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`.
 
-Telas disponíveis: dashboard, fornecedores, categorias, produtos, ofertas, importação CSV, usuários, configurações e logs (auditoria e sincronização). Os módulos das próximas fases aparecem desabilitados no menu.
+Telas disponíveis: dashboard, fornecedores, categorias, produtos, ofertas, simulador de preços, importação CSV, usuários, configurações e logs (auditoria e sincronização). Os módulos das próximas fases aparecem desabilitados no menu.
 
 Em produção, aponte o servidor web para a pasta `public/`, use `CI_ENVIRONMENT=production` e `app.forceGlobalSecureRequests=true` (HTTPS).
 
@@ -182,7 +187,7 @@ Na tela **Importações**, baixe o modelo de CSV, preencha e envie para um forne
 Para cada produto, o sistema avalia todas as ofertas vinculadas e escolhe um **fornecedor principal** e até duas **reservas**.
 
 1. **Estoque disponível** = `max(0, estoque informado − estoque de segurança)`. O estoque de segurança vem do produto; se não houver, do fornecedor; se não houver, da configuração global.
-2. **Critérios eliminatórios**: fornecedor inativo ou bloqueado, oferta inativa, oferta bloqueada manualmente (com motivo), custo inválido, estoque disponível zero, prazo de postagem não informado ou acima do limite configurado.
+2. **Critérios eliminatórios**: fornecedor inativo ou bloqueado, oferta inativa, oferta bloqueada manualmente (com motivo), custo inválido, estoque disponível zero, prazo de postagem não informado ou acima do limite configurado, e margem mínima não atingida (ver [Precificação](#precificação)).
 3. **Score de 0 a 100** entre as ofertas elegíveis, ponderado pelos pesos de **Configurações**:
    - preço final (custo + frete): o menor recebe 100 e os demais, proporcionalmente;
    - estoque disponível: proporcional ao maior entre as elegíveis;
@@ -191,15 +196,31 @@ Para cada produto, o sistema avalia todas as ofertas vinculadas e escolhe um **f
    - prioridade do fornecedor: prioridade × 10.
 4. Empates são resolvidos por menor custo total, menor prazo, maior estoque disponível e oferta mais antiga.
 
-A seleção é recalculada automaticamente quando uma oferta é criada, alterada, excluída, bloqueada ou (des)vinculada; quando um fornecedor ou o estoque de segurança de um produto muda; após cada importação; e quando as configurações de estoque, fornecedores ou ranking são salvas. Se o principal fica inelegível, outro elegível assume na hora.
+A seleção é recalculada automaticamente quando uma oferta é criada, alterada, excluída, bloqueada ou (des)vinculada; quando um fornecedor muda; quando o produto muda algo que afeta a escolha (estoque de segurança, categoria, margens, preço fixo ou custo extra); quando as margens de uma categoria mudam (inclusive para as subcategorias); após cada importação; e quando as configurações de precificação, estoque, fornecedores ou ranking são salvas. Se o principal fica inelegível, outro elegível assume na hora.
 
 Toda troca de fornecedor principal é registrada em `supplier_selection_logs` (com o motivo, a origem e o ranking completo) e na auditoria. A tela do produto mostra o score, os motivos por critério, a comparação com os demais fornecedores e o histórico de trocas. O botão **Recalcular** força um novo cálculo.
 
-O critério de margem mínima depende da precificação e entra na Fase 4.
+### Precificação
+
+O preço considera custo do fornecedor, frete do fornecedor, comissão e tarifa fixa do marketplace, impostos estimados, custos extras (por unidade e percentuais) e a margem. **Margem é o lucro sobre o preço de venda**, então o preço não é "custo + percentual":
+
+```
+preço = custos fixos / (1 − (comissão% + impostos% + extras% + margem%) / 100)
+custos fixos = custo + frete + custos extras por unidade (+ tarifa fixa, se o preço ficar abaixo da faixa)
+```
+
+- **Margens desejada e mínima** podem ser definidas no produto, na categoria (vale também para as subcategorias) ou na configuração global; a mais específica prevalece, campo a campo. Se a mínima efetiva for maior que a desejada, o preço sugerido usa a mínima.
+- **Tarifa fixa por faixa**: cobrada só em vendas abaixo do valor configurado. Quando a tarifa empurraria o preço para cima da faixa, o preço fica no limite da faixa, onde ela não se aplica.
+- **Arredondamento** configurável (centavo, terminar em ,90 ou ,99, real inteiro), sempre para cima, para nunca reduzir a margem.
+- **Preço fixo** opcional no produto. Ao salvar, o preço é recusado se nenhum fornecedor atingir a margem mínima com ele; a mensagem mostra o preço mínimo possível.
+- **Margem mínima no motor de seleção**: com preço fixo, ofertas cujo custo não permite a margem mínima ficam inelegíveis (e o motor troca para um fornecedor que permita). Sem preço fixo, uma oferta só é eliminada se os percentuais somarem 100% ou mais, já que o preço sugerido sempre cobre a margem.
+- Se um aumento de custo deixar o preço fixo abaixo da mínima com todos os fornecedores, o produto fica sem fornecedor elegível e aparece no alerta **margem abaixo da mínima** do dashboard e no filtro **Precificação** da lista de produtos.
+
+A tela do produto mostra a composição completa (custo, frete, comissão, tarifa fixa, impostos, extras, preço, lucro e margem), de onde veio cada margem e o preço de cada oferta. O **Simulador de preços** (menu Catálogo) calcula sem gravar nada, com as mesmas regras.
 
 ## Cron
 
-A confiabilidade usa uma janela de tempo, então ela muda mesmo sem edições. Agende o recálculo:
+A confiabilidade usa uma janela de tempo, então ela muda mesmo sem edições. Agende o recálculo (ele também atualiza os preços gravados):
 
 ```cron
 0 * * * * cd /caminho/marketplace-hub && php spark suppliers:select >> writable/logs/cron.log 2>&1
@@ -268,9 +289,23 @@ vendor/bin/phpunit --coverage-html build/coverage   # requer Xdebug ou PCOV
 
 Suítes:
 
-- **unit**: normalização decimal, conector CSV, fábrica de conectores, limpeza de dados sensíveis na auditoria e regras do ranking de fornecedores;
-- **database**: importação CSV, produtos, categorias, fornecedores/ofertas, configurações e motor de seleção (troca automática, histórico, estoque de segurança, confiabilidade);
-- **feature**: login/logout, controle de acesso por papel, API interna, proteção CSRF, tela do produto com a explicação da escolha e comando `suppliers:select`.
+- **unit**: normalização decimal, conector CSV, fábrica de conectores, limpeza de dados sensíveis na auditoria, regras do ranking de fornecedores (incluindo margem mínima) e calculador de preço (fórmula, tarifa fixa por faixa, arredondamento, preço manual, percentuais inviáveis);
+- **database**: importação CSV, produtos, categorias, fornecedores/ofertas, configurações, motor de seleção (troca automática, histórico, estoque de segurança, confiabilidade) e precificação (hierarquia de margens, bloqueio de preço abaixo da mínima, troca de fornecedor por margem, reprecificação por categoria);
+- **feature**: login/logout, controle de acesso por papel, API interna, proteção CSRF, tela do produto com a explicação da escolha e a composição do preço, simulador, alertas de margem e comando `suppliers:select`.
+
+## API interna
+
+Rotas JSON autenticadas por sessão:
+
+| Rota | Conteúdo |
+|---|---|
+| `GET /api/products` | Lista paginada (filtros `q`, `sku`, `ean`, `brand`, `category_id`, `status`, `supplier`, `pricing`) |
+| `GET /api/products/{id}` | Produto com imagens |
+| `GET /api/products/{id}/offers` | Ofertas em ordem de ranking |
+| `GET /api/products/{id}/selection` | Ranking com motivos, margens e preço de cada oferta |
+| `GET /api/products/{id}/pricing` | Composição do preço com o fornecedor principal |
+| `GET /api/pricing/simulate` | Simulação (`cost_price`, `shipping_cost`, `extra_cost`, `category_id`, margens, `sale_price`) |
+| `GET /api/suppliers` e `GET /api/suppliers/{id}` | Fornecedores |
 
 ## Roadmap
 
@@ -279,8 +314,8 @@ Suítes:
 | 1 | Base: estrutura, banco, layout, autenticação, configurações | Concluída |
 | 2 | Fornecedores, catálogo, ofertas, importação CSV | Concluída |
 | 3 | Motor de seleção de fornecedor | Concluída |
-| 4 | Precificação | Próxima |
-| 5 | Mercado Livre: OAuth | Planejada |
+| 4 | Precificação | Concluída |
+| 5 | Mercado Livre: OAuth | Próxima |
 | 6 | Publicações | Planejada |
 | 7 | Pedidos | Planejada |
 | 8 | Automação (jobs, cron, webhooks) | Planejada |

@@ -8,14 +8,14 @@ use CodeIgniter\CLI\BaseCommand;
 use CodeIgniter\CLI\CLI;
 
 /**
- * Recalcula a seleção de fornecedores. Indicado para rodar no cron, já que a
- * confiabilidade depende de uma janela de tempo e muda mesmo sem edições.
+ * Recalcula a seleção de fornecedores e os preços. Indicado para rodar no cron,
+ * já que a confiabilidade depende de uma janela de tempo e muda mesmo sem edições.
  */
 class SelectSuppliers extends BaseCommand
 {
     protected $group       = 'Marketplace Hub';
     protected $name        = 'suppliers:select';
-    protected $description = 'Recalcula o fornecedor principal e as reservas dos produtos.';
+    protected $description = 'Recalcula o fornecedor principal, as reservas e o preço dos produtos.';
     protected $usage       = 'suppliers:select [--product <id>] [--supplier <id>]';
     protected $options     = [
         '--product'  => 'Recalcula somente o produto informado.',

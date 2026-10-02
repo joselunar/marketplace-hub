@@ -27,6 +27,7 @@
                 <th>Nome</th>
                 <th>Categoria pai</th>
                 <th>Slug</th>
+                <th class="text-center">Margem desejada / mínima</th>
                 <th class="text-center">Produtos</th>
                 <th>Status</th>
                 <th class="text-end">Ações</th>
@@ -38,6 +39,15 @@
                     <td class="fw-medium"><?= esc($category['name']) ?></td>
                     <td class="small"><?= esc($category['parent_name'] ?? '—') ?></td>
                     <td class="small text-body-secondary"><code><?= esc($category['slug']) ?></code></td>
+                    <td class="text-center small">
+                        <?php if ($category['desired_margin_percentage'] === null && $category['minimum_margin_percentage'] === null): ?>
+                            <span class="text-body-secondary">Herdada</span>
+                        <?php else: ?>
+                            <?= $category['desired_margin_percentage'] !== null ? percent_format($category['desired_margin_percentage']) : '<span class="text-body-secondary">herdada</span>' ?>
+                            /
+                            <?= $category['minimum_margin_percentage'] !== null ? percent_format($category['minimum_margin_percentage']) : '<span class="text-body-secondary">herdada</span>' ?>
+                        <?php endif ?>
+                    </td>
                     <td class="text-center">
                         <a href="<?= site_url('products?category_id=' . $category['id']) ?>"><?= (int) $category['products_count'] ?></a>
                     </td>

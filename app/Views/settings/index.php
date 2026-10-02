@@ -14,7 +14,9 @@
                     <div class="card-header bg-white fw-semibold"><?= esc($group['label']) ?></div>
                     <div class="card-body">
                         <?php if ($groupKey === 'ranking'): ?>
-                            <p class="small text-body-secondary">Os pesos serão usados pelo motor de seleção de fornecedores (Fase 3). Eles são normalizados pela soma, então não precisam totalizar 100.</p>
+                            <p class="small text-body-secondary">Pesos usados pelo motor de seleção de fornecedores. Eles são normalizados pela soma, então não precisam totalizar 100.</p>
+                        <?php elseif ($groupKey === 'pricing'): ?>
+                            <p class="small text-body-secondary">Percentuais incidem sobre o preço de venda. As tarifas do marketplace não ficam fixas no sistema: confira a tabela oficial antes de preencher. Ao salvar, preços e seleção de fornecedores são recalculados.</p>
                         <?php endif ?>
 
                         <?php foreach ($group['items'] as $key => $item): ?>
@@ -28,6 +30,19 @@
                                     <input type="hidden" name="settings[<?= esc($key, 'attr') ?>]" value="0">
                                     <input class="form-check-input" type="checkbox" role="switch" id="<?= $inputId ?>" name="settings[<?= esc($key, 'attr') ?>]" value="1" <?= ! empty($current) ? 'checked' : '' ?>>
                                     <label class="form-check-label" for="<?= $inputId ?>"><?= esc($item['label']) ?></label>
+                                </div>
+                            <?php elseif (! empty($item['options'])): ?>
+                                <div class="mb-3">
+                                    <label class="form-label" for="<?= $inputId ?>"><?= esc($item['label']) ?></label>
+                                    <select class="form-select<?= invalid_class($key) ?>" id="<?= $inputId ?>" name="settings[<?= esc($key, 'attr') ?>]">
+                                        <?php foreach ($item['options'] as $optionValue => $optionLabel): ?>
+                                            <option value="<?= esc($optionValue, 'attr') ?>" <?= (string) $current === (string) $optionValue ? 'selected' : '' ?>><?= esc($optionLabel) ?></option>
+                                        <?php endforeach ?>
+                                    </select>
+                                    <?php if (! empty($item['help'])): ?>
+                                        <div class="form-text"><?= esc($item['help']) ?></div>
+                                    <?php endif ?>
+                                    <div class="invalid-feedback"><?= esc(field_error($key) ?? '') ?></div>
                                 </div>
                             <?php else: ?>
                                 <div class="mb-3">

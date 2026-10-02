@@ -31,13 +31,16 @@
 - Explicação da escolha na tela do produto, alerta no dashboard e endpoint `GET /api/products/{id}/selection`
 - Comando `php spark suppliers:select` para o cron
 
-## Fase 4 — Precificação
+## Fase 4 — Precificação ✅
 
-- `PricingService`: custo + frete + impostos + tarifas + margem desejada
-- Margem mínima e bloqueio de preços abaixo dela
-- Critério eliminatório de margem mínima no motor de seleção
-- Regras de arredondamento e simulação de preço
-- Tarifas do marketplace obtidas da fonte oficial, nunca fixas no código
+- `PriceCalculator` (puro) e `PricingService`: custo + frete + comissão e tarifa fixa do marketplace + impostos + custos extras + margem sobre o preço de venda
+- Margens desejada e mínima por produto, categoria (herdada pelas subcategorias) e global
+- Tarifa fixa por faixa de preço e arredondamento configurável, sempre para cima
+- Preço fixo opcional no produto, recusado quando nenhum fornecedor atinge a margem mínima
+- Critério eliminatório de margem mínima no motor de seleção, com troca automática de fornecedor
+- Composição do preço na tela do produto, simulador de preços, filtro e alerta de margem abaixo da mínima
+- Endpoints `GET /api/products/{id}/pricing` e `GET /api/pricing/simulate`
+- Tarifas do marketplace como configuração (nunca fixas no código)
 
 ## Fase 5 — Mercado Livre: OAuth
 
@@ -51,6 +54,7 @@
 - Criação e atualização de anúncios (modelo User Products quando aplicável)
 - Vínculo produto ↔ anúncio e histórico de publicações
 - Atualização de preço e estoque
+- Tarifas do anúncio consultadas na API oficial do Mercado Livre e usadas no cálculo do preço
 - Publicação automática desabilitada por padrão
 
 ## Fase 7 — Pedidos

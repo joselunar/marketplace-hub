@@ -2,6 +2,9 @@
 
 namespace Tests\Unit\Suppliers;
 
+use App\DTO\Pricing\MarginPolicy;
+use App\DTO\Pricing\PricingConfig;
+use App\DTO\Pricing\PricingContext;
 use App\DTO\Suppliers\OfferEvaluation;
 use App\DTO\Suppliers\RankingConfig;
 use App\Services\Suppliers\Selection\SupplierRanker;
@@ -147,6 +150,52 @@ final class SupplierRankerTest extends CIUnitTestCase
         $this->assertSame(4, $result->primary()->shippingDays);
     }
 
+    public function testManualPriceBelowMinimumMarginMakesOfferIneligible(): void
+    {
+        $offers = [
+            $this->offer(1, ['cost_price' => '100.00', 'stock_quantity' => 500, 'supplier_name' => 'Cara']),
+            $this->offer(2, ['cost_price' => '60.00', 'stock_quantity' => 5, 'supplier_name' => 'Barata']),
+        ];
+
+        $result = $this->ranker->rank(['id' => 1], $offers, $this->config(), [], $this->pricing(manualPrice: '105.00'));
+
+        $expensive = $result->find(1);
+        $this->assertSame(2, $result->primary()->offerId);
+        $this->assertSame(['Margem de 4,8% no preço de R$ 105,00, abaixo da mínima de 10,0% (preço mínimo R$ 111,12)'], $expensive->ineligibilityReasons);
+        $this->assertTrue($expensive->blockedOnlyByMargin());
+        $this->assertSame('42.86', $result->primary()->pricing->marginPercentage);
+        $this->assertSame([1], array_map(static fn ($e) => $e->offerId, $result->blockedOnlyByMargin()));
+    }
+
+    public function testSuggestedPriceIsAttachedWithoutManualPrice(): void
+    {
+        $result = $this->ranker->rank(['id' => 1], [$this->offer(1, ['cost_price' => '80.00'])], $this->config(), [], $this->pricing());
+
+        $pricing = $result->primary()->pricing;
+        $this->assertFalse($pricing->isManual());
+        $this->assertSame('100.00', $pricing->price, '80 / (1 − 0,20)');
+        $this->assertSame('20.00', $pricing->marginPercentage);
+    }
+
+    public function testImpossiblePricingMakesOfferIneligible(): void
+    {
+        $pricing = $this->pricing(desired: '95', minimum: '95', fee: '10');
+        $result  = $this->ranker->rank(['id' => 1], [$this->offer(1)], $this->config(), [], $pricing);
+
+        $evaluation = $result->find(1);
+        $this->assertNull($result->primary());
+        $this->assertNull($evaluation->pricing);
+        $this->assertStringStartsWith('Precificação inviável: Comissão (10%)', $evaluation->ineligibilityReasons[0]);
+    }
+
+    public function testWithoutPricingContextMarginIsNotChecked(): void
+    {
+        $result = $this->ranker->rank(['id' => 1], [$this->offer(1)], $this->config());
+
+        $this->assertNotNull($result->primary());
+        $this->assertNull($result->primary()->pricing);
+    }
+
     public function testConfigRejectsAllZeroWeights(): void
     {
         $this->expectException(InvalidArgumentException::class);
@@ -162,6 +211,13 @@ final class SupplierRankerTest extends CIUnitTestCase
             7,
             30,
         );
+    }
+
+    private function pricing(?string $manualPrice = null, string $desired = '20', string $minimum = '10', string $fee = '0'): PricingContext
+    {
+        $config = new PricingConfig($desired, $minimum, '0', $fee, '0', '0', '0', '0', PricingConfig::ROUNDING_CENTS);
+
+        return new PricingContext($config, MarginPolicy::global($config), $manualPrice);
     }
 
     private function offer(int $id, array $overrides = []): array

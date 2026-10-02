@@ -10,6 +10,7 @@ use App\Models\ProductModel;
 use App\Models\SupplierOfferModel;
 use App\Models\SupplierSelectionLogModel;
 use App\Services\Audit\AuditService;
+use App\Services\Pricing\PricingService;
 use App\Services\Settings\SettingsService;
 use App\Services\Suppliers\Selection\SupplierRanker;
 use App\Services\Suppliers\Selection\SupplierReliabilityService;
@@ -19,8 +20,9 @@ use CodeIgniter\Database\BaseConnection;
  * Motor de seleção de fornecedores.
  *
  * Avalia as ofertas de cada produto, grava o score/posição de cada uma e o
- * fornecedor principal no produto. Toda troca de fornecedor principal fica
- * registrada em supplier_selection_logs e na auditoria.
+ * fornecedor principal no produto, junto com o preço e a margem calculados
+ * para ele. Toda troca de fornecedor principal fica registrada em
+ * supplier_selection_logs e na auditoria.
  */
 class SupplierSelectionService
 {
@@ -30,6 +32,7 @@ class SupplierSelectionService
     public const TRIGGER_SUPPLIER = 'supplier';
     public const TRIGGER_IMPORT   = 'import';
     public const TRIGGER_SETTINGS = 'settings';
+    public const TRIGGER_CATEGORY = 'category';
     public const TRIGGER_COMMAND  = 'command';
     public const TRIGGER_SEED     = 'seed';
 
@@ -40,8 +43,20 @@ class SupplierSelectionService
         self::TRIGGER_SUPPLIER => 'Alteração do fornecedor',
         self::TRIGGER_IMPORT   => 'Importação',
         self::TRIGGER_SETTINGS => 'Alteração de configurações',
+        self::TRIGGER_CATEGORY => 'Alteração da categoria',
         self::TRIGGER_COMMAND  => 'Linha de comando',
         self::TRIGGER_SEED     => 'Dados de demonstração',
+    ];
+
+    public const PRICE_STATUS_OK            = 'ok';
+    public const PRICE_STATUS_BELOW_MINIMUM = 'below_minimum';
+    public const PRICE_STATUS_INVALID       = 'invalid';
+
+    /**
+     * Colunas do produto que influenciam a seleção e o preço.
+     */
+    public const PRODUCT_FIELDS = [
+        'category_id', 'safety_stock', 'desired_margin_percentage', 'minimum_margin_percentage', 'sale_price', 'extra_cost',
     ];
 
     private const CHUNK_SIZE = 200;
@@ -56,19 +71,21 @@ class SupplierSelectionService
         private readonly SupplierReliabilityService $reliability = new SupplierReliabilityService(),
         private readonly ?SettingsService $settings = null,
         private readonly ?AuditService $audit = null,
+        private readonly ?PricingService $pricing = null,
     ) {
         $this->db = $this->offers->db;
     }
 
     /**
      * Calcula o ranking sem gravar nada (usado na tela do produto e na API).
+     *
+     * @param array<string, mixed> $overrides valores ainda não gravados do produto (pré-validação do formulário)
      */
-    public function evaluate(int $productId): SelectionResult
+    public function evaluate(int $productId, array $overrides = []): SelectionResult
     {
-        $product = $this->findProduct($productId);
-        $config  = $this->config();
+        $product = array_merge($this->findProduct($productId), array_intersect_key($overrides, array_flip(self::PRODUCT_FIELDS)));
 
-        return $this->ranker->rank($product, $this->offersFor([$productId])[$productId] ?? [], $config, $this->reliability->scores($config->reliabilityWindowDays));
+        return $this->rank($product);
     }
 
     /**
@@ -79,9 +96,7 @@ class SupplierSelectionService
      */
     public function select(int $productId, string $trigger, ?int $userId = null, ?array $removedOffer = null): SelectionResult
     {
-        $product = $this->findProduct($productId);
-        $config  = $this->config();
-        $result  = $this->ranker->rank($product, $this->offersFor([$productId])[$productId] ?? [], $config, $this->reliability->scores($config->reliabilityWindowDays));
+        $result = $this->rank($this->findProduct($productId));
 
         $this->persist($result, $trigger, $userId, $removedOffer);
 
@@ -102,15 +117,18 @@ class SupplierSelectionService
             return $stats;
         }
 
-        $config      = $this->config();
-        $reliability = $this->reliability->scores($config->reliabilityWindowDays);
+        $config        = $this->config();
+        $reliability   = $this->reliability->scores($config->reliabilityWindowDays);
+        $pricingConfig = $this->pricing()->config();
 
         foreach (array_chunk($productIds, self::CHUNK_SIZE) as $chunk) {
-            $products = $this->products->select('id, safety_stock, selected_offer_id')->whereIn('id', $chunk)->findAll();
+            $products = $this->products->select($this->productColumns())->whereIn('id', $chunk)->findAll();
             $offers   = $this->offersFor($chunk);
+            $contexts = $this->pricing()->contexts($products, $pricingConfig);
 
             foreach ($products as $product) {
-                $result = $this->ranker->rank($product, $offers[(int) $product['id']] ?? [], $config, $reliability);
+                $id     = (int) $product['id'];
+                $result = $this->ranker->rank($product, $offers[$id] ?? [], $config, $reliability, $contexts[$id]);
                 $stats['evaluated']++;
 
                 if ($this->persist($result, $trigger, $userId)) {
@@ -136,6 +154,29 @@ class SupplierSelectionService
             ->getResultArray();
 
         return $this->selectForProducts(array_column($rows, 'product_id'), $trigger, $userId);
+    }
+
+    /**
+     * Produtos das categorias informadas (as margens são herdadas por elas).
+     *
+     * @param list<int> $categoryIds
+     *
+     * @return array{evaluated: int, changed: int}
+     */
+    public function selectForCategories(array $categoryIds, string $trigger, ?int $userId = null): array
+    {
+        if ($categoryIds === []) {
+            return ['evaluated' => 0, 'changed' => 0];
+        }
+
+        $rows = $this->products->builder()
+            ->select('id')
+            ->whereIn('category_id', $categoryIds)
+            ->where('EXISTS (' . ProductModel::HAS_OFFER_SQL . ')', null, false)
+            ->get()
+            ->getResultArray();
+
+        return $this->selectForProducts(array_column($rows, 'id'), $trigger, $userId);
     }
 
     /**
@@ -234,7 +275,7 @@ class SupplierSelectionService
         $this->db->table('products')->where('id', $productId)->update([
             'selected_offer_id'    => $newId,
             'selection_updated_at' => $now,
-        ]);
+        ] + $this->pricingColumns($result, $now));
 
         $changed = $previousId !== $newId || ($previousId === null && $removedOffer !== null);
 
@@ -245,6 +286,34 @@ class SupplierSelectionService
         $this->db->transComplete();
 
         return $changed;
+    }
+
+    /**
+     * Preço e margem gravados no produto a partir do fornecedor principal.
+     * Sem principal, mas com oferta barrada só pela margem, grava a melhor
+     * delas com status "abaixo da mínima" para o alerta do dashboard.
+     */
+    private function pricingColumns(SelectionResult $result, string $now): array
+    {
+        $primary  = $result->primary();
+        $blocked  = $result->blockedOnlyByMargin();
+        $invalid  = array_filter($result->evaluations, static fn (OfferEvaluation $e) => $e->marginBlocked && $e->pricing === null);
+
+        [$breakdown, $status] = match (true) {
+            $primary?->pricing !== null => [$primary->pricing, self::PRICE_STATUS_OK],
+            $primary === null && $blocked !== [] => [$blocked[0]->pricing, self::PRICE_STATUS_BELOW_MINIMUM],
+            $primary === null && $invalid !== [] => [null, self::PRICE_STATUS_INVALID],
+            default => [null, null],
+        };
+
+        return [
+            'suggested_price'    => $breakdown?->suggestedPrice,
+            'minimum_price'      => $breakdown?->minimumPrice,
+            'estimated_profit'   => $breakdown?->profit,
+            'estimated_margin'   => $breakdown?->marginPercentage,
+            'price_status'       => $status,
+            'pricing_updated_at' => $status === null ? null : $now,
+        ];
     }
 
     private function recordChange(SelectionResult $result, ?array $previous, string $trigger, ?int $userId): void
@@ -398,7 +467,7 @@ class SupplierSelectionService
 
     private function findProduct(int $productId): array
     {
-        $product = $this->products->select('id, safety_stock, selected_offer_id')->find($productId);
+        $product = $this->products->select($this->productColumns())->find($productId);
 
         if ($product === null) {
             throw new BusinessRuleException('Produto não encontrado.');
@@ -407,9 +476,33 @@ class SupplierSelectionService
         return $product;
     }
 
+    private function rank(array $product): SelectionResult
+    {
+        $config    = $this->config();
+        $productId = (int) $product['id'];
+
+        return $this->ranker->rank(
+            $product,
+            $this->offersFor([$productId])[$productId] ?? [],
+            $config,
+            $this->reliability->scores($config->reliabilityWindowDays),
+            $this->pricing()->contextFor($product),
+        );
+    }
+
+    private function productColumns(): string
+    {
+        return 'id, selected_offer_id, ' . implode(', ', self::PRODUCT_FIELDS);
+    }
+
     private function config(): RankingConfig
     {
         return RankingConfig::fromSettings($this->settings ?? service('settings'));
+    }
+
+    private function pricing(): PricingService
+    {
+        return $this->pricing ?? service('pricing');
     }
 
     private function score(?float $score): string

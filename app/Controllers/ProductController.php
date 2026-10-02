@@ -22,7 +22,7 @@ class ProductController extends BaseController
 
     public function index(): string
     {
-        $filters = $this->filters(['q', 'sku', 'ean', 'brand', 'category_id', 'status', 'supplier', 'selection', 'stock']);
+        $filters = $this->filters(['q', 'sku', 'ean', 'brand', 'category_id', 'status', 'supplier', 'selection', 'pricing', 'stock']);
         $model   = new ProductModel();
 
         $products = $model->withOfferStats()

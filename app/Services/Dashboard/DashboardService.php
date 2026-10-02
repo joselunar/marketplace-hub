@@ -30,6 +30,8 @@ class DashboardService
             'productsWithoutOffer' => $this->products->applyFilters(['status' => 'active', 'supplier' => 'without'])->countAllResults(),
             'productsOutOfStock'   => $this->products->applyFilters(['status' => 'active', 'stock' => 'out'])->countAllResults(),
             'productsWithoutEligibleSupplier' => $this->products->applyFilters(['status' => 'active', 'selection' => 'none'])->countAllResults(),
+            'productsBelowMinimumMargin' => $this->products->applyFilters(['status' => 'active', 'pricing' => 'below_minimum'])->countAllResults(),
+            'productsWithInvalidPricing' => $this->products->applyFilters(['status' => 'active', 'pricing' => 'invalid'])->countAllResults(),
             'activeSuppliers'      => $this->suppliers->where('status', 'active')->countAllResults(),
             'recentSupplierChanges' => $this->selectionLogs
                 ->select('supplier_selection_logs.*, products.sku AS product_sku')

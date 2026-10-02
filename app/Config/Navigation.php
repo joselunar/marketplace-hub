@@ -29,6 +29,7 @@ class Navigation extends BaseConfig
                 ['label' => 'Produtos', 'icon' => 'box-seam', 'url' => 'products', 'prefix' => 'products'],
                 ['label' => 'Categorias', 'icon' => 'diagram-3', 'url' => 'categories', 'prefix' => 'categories'],
                 ['label' => 'Ofertas de fornecedores', 'icon' => 'tags', 'url' => 'offers', 'prefix' => 'offers'],
+                ['label' => 'Simulador de preços', 'icon' => 'calculator', 'url' => 'pricing', 'prefix' => 'pricing'],
             ],
         ],
         [

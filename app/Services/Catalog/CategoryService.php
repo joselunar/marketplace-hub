@@ -7,6 +7,8 @@ use App\Exceptions\ValidationException;
 use App\Models\CategoryModel;
 use App\Models\ProductModel;
 use App\Services\Audit\AuditService;
+use App\Services\Suppliers\SupplierSelectionService;
+use App\Support\Decimal;
 use App\Support\Input;
 
 class CategoryService
@@ -15,6 +17,7 @@ class CategoryService
         private readonly CategoryModel $categories = new CategoryModel(),
         private readonly ProductModel $products = new ProductModel(),
         private readonly ?AuditService $audit = null,
+        private readonly ?SupplierSelectionService $selection = null,
     ) {
     }
 
@@ -32,7 +35,13 @@ class CategoryService
         return $id;
     }
 
-    public function update(int $id, array $input): void
+    /**
+     * Mudanças de margem ou de categoria pai alteram as margens herdadas,
+     * então os produtos da categoria e das subcategorias são reprecificados.
+     *
+     * @return array{evaluated: int, changed: int}|null null quando nada precisou ser recalculado
+     */
+    public function update(int $id, array $input): ?array
     {
         $current = $this->findOrFail($id);
         $data    = $this->prepare($input, $id);
@@ -44,6 +53,23 @@ class CategoryService
         }
 
         $this->audit()->log('update', 'category', $id, $current, $data);
+
+        $changed = false;
+
+        foreach (['parent_id', 'desired_margin_percentage', 'minimum_margin_percentage'] as $field) {
+            if ($this->normalize($current[$field] ?? null) !== $this->normalize($data[$field] ?? null)) {
+                $changed = true;
+            }
+        }
+
+        if (! $changed) {
+            return null;
+        }
+
+        return $this->selection()->selectForCategories(
+            $this->categories->subtreeIds($id),
+            SupplierSelectionService::TRIGGER_CATEGORY,
+        );
     }
 
     public function delete(int $id): void
@@ -75,18 +101,39 @@ class CategoryService
 
     private function prepare(array $input, ?int $id = null): array
     {
-        $data = Input::only($input, ['parent_id', 'name', 'description']);
+        $data = Input::only($input, ['parent_id', 'name', 'description', 'desired_margin_percentage', 'minimum_margin_percentage']);
 
         $data['name']      = $data['name'] ?? '';
         $data['slug']      = Input::slug($data['name']);
         $data['parent_id'] = isset($data['parent_id']) ? (int) $data['parent_id'] : null;
         $data['active']    = Input::flag($input['active'] ?? 0);
 
+        foreach (['desired_margin_percentage', 'minimum_margin_percentage'] as $field) {
+            $value        = $data[$field] ?? null;
+            $data[$field] = $value === null ? null : (Decimal::normalize($value) ?? $value);
+        }
+
+        $desired = $data['desired_margin_percentage'];
+        $minimum = $data['minimum_margin_percentage'];
+
+        if (is_numeric($desired) && is_numeric($minimum) && bccomp((string) $minimum, (string) $desired, 2) > 0) {
+            throw new ValidationException(['minimum_margin_percentage' => 'A margem mínima não pode ser maior que a margem desejada.']);
+        }
+
         if ($id !== null) {
             $data['id'] = $id;
         }
 
         return $data;
+    }
+
+    private function normalize(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return is_numeric($value) ? Decimal::round((string) $value, 2) : (string) $value;
     }
 
     /**
@@ -108,5 +155,10 @@ class CategoryService
     private function audit(): AuditService
     {
         return $this->audit ?? service('audit');
+    }
+
+    private function selection(): SupplierSelectionService
+    {
+        return $this->selection ?? service('supplierSelection');
     }
 }

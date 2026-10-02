@@ -8,7 +8,7 @@ use App\Models\OrderModel;
 <?= $this->section('content') ?>
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
     <p class="text-body-secondary small mb-0">
-        Vendas recebidas pelas notificações do Mercado Livre ou pela importação manual.
+        Vendas recebidas pelas notificações dos marketplaces ou pela importação manual.
         Nada é comprado automaticamente: o fornecedor só é acionado quando você usa <em>Enviar pedido ao fornecedor</em>.
     </p>
     <?php if ($accounts !== []): ?>
@@ -17,7 +17,7 @@ use App\Models\OrderModel;
             <?php if (count($accounts) > 1): ?>
                 <select name="account" class="form-select form-select-sm" aria-label="Conta" required>
                     <?php foreach ($accounts as $account): ?>
-                        <option value="<?= (int) $account['id'] ?>"><?= esc($account['name']) ?></option>
+                        <option value="<?= (int) $account['id'] ?>"><?= esc($account['marketplace_name'] . ' · ' . $account['name']) ?></option>
                     <?php endforeach ?>
                 </select>
             <?php else: ?>
@@ -51,7 +51,7 @@ use App\Models\OrderModel;
                 </select>
             </div>
             <div class="col-sm-3 col-lg-2">
-                <label class="form-label" for="status">Status no Mercado Livre</label>
+                <label class="form-label" for="status">Status no marketplace</label>
                 <select class="form-select form-select-sm" id="status" name="status">
                     <option value="">Todos</option>
                     <?php foreach (OrderModel::STATUS_LABELS as $value => $label): ?>
@@ -74,7 +74,7 @@ use App\Models\OrderModel;
                     <select class="form-select form-select-sm" id="account" name="account">
                         <option value="">Todas</option>
                         <?php foreach ($accounts as $account): ?>
-                            <option value="<?= (int) $account['id'] ?>" <?= ($filters['account'] ?? '') === (string) $account['id'] ? 'selected' : '' ?>><?= esc($account['name']) ?></option>
+                            <option value="<?= (int) $account['id'] ?>" <?= ($filters['account'] ?? '') === (string) $account['id'] ? 'selected' : '' ?>><?= esc($account['marketplace_name'] . ' · ' . $account['name']) ?></option>
                         <?php endforeach ?>
                     </select>
                 </div>
@@ -90,10 +90,10 @@ use App\Models\OrderModel;
 <div class="card">
     <?php if ($orders === []): ?>
         <?= view('partials/empty_state', ['icon' => 'receipt', 'message' => $filters === []
-            ? ($accounts === [] ? 'Nenhum pedido ainda. Conecte uma conta do Mercado Livre para receber as vendas.' : 'Nenhum pedido ainda. As vendas chegam pelas notificações do Mercado Livre ou pelo botão "Importar pedidos".')
+            ? ($accounts === [] ? 'Nenhum pedido ainda. Conecte uma conta de marketplace para receber as vendas.' : 'Nenhum pedido ainda. As vendas chegam pelas notificações dos marketplaces ou pelo botão "Importar pedidos".')
             : 'Nenhum pedido encontrado com esses filtros.']) ?>
         <?php if ($filters === [] && $accounts === []): ?>
-            <div class="text-center pb-4"><a href="<?= site_url('marketplaces/mercadolivre') ?>" class="btn btn-sm btn-primary">Conectar conta</a></div>
+            <div class="text-center pb-4"><a href="<?= site_url('marketplaces') ?>" class="btn btn-sm btn-primary">Conectar conta</a></div>
         <?php endif ?>
     <?php else: ?>
         <div class="table-responsive">
@@ -106,7 +106,7 @@ use App\Models\OrderModel;
                         <th class="text-end">Total</th>
                         <th class="text-end">Lucro estimado</th>
                         <th class="text-end">Margem</th>
-                        <th>Mercado Livre</th>
+                        <th>Status</th>
                         <th>Andamento</th>
                         <th class="text-end">Ações</th>
                     </tr>

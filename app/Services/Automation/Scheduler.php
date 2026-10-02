@@ -3,21 +3,22 @@
 namespace App\Services\Automation;
 
 use App\Exceptions\BusinessRuleException;
-use App\Jobs\ImportMercadoLivreOrdersJob;
-use App\Jobs\ProcessMercadoLivreNotificationsJob;
+use App\Jobs\ImportMarketplaceOrdersJob;
+use App\Jobs\ProcessMarketplaceNotificationsJob;
 use App\Jobs\RecalculateSupplierSelectionJob;
-use App\Jobs\RefreshMercadoLivreTokenJob;
+use App\Jobs\RefreshMarketplaceTokenJob;
 use App\Jobs\SyncSupplierPricesJob;
 use App\Jobs\SyncSupplierStockJob;
 use App\Models\JobModel;
 use App\Models\MarketplaceAccountModel;
 use App\Models\ScheduledTaskModel;
 use App\Models\SyncLogModel;
-use App\Models\WebhookEventModel;
+use App\Services\Marketplaces\Contracts\MarketplaceAdapter;
+use App\Services\Marketplaces\MarketplaceAccountService;
+use App\Services\Marketplaces\MarketplaceRegistry;
 use App\Services\Settings\SettingsService;
 use App\Services\Suppliers\SupplierSyncService;
 use Config\Automation;
-use Config\MercadoLivre;
 use Throwable;
 
 /**
@@ -40,6 +41,7 @@ class Scheduler
         private readonly ?SupplierSyncService $supplierSync = null,
         private readonly ?ListingAutoSync $autoSync = null,
         private readonly Automation $config = new Automation(),
+        private readonly ?MarketplaceRegistry $marketplaces = null,
     ) {
     }
 
@@ -172,15 +174,15 @@ class Scheduler
     private function dispatch(string $name, string $source, ?int $userId): string
     {
         return match ($name) {
-            'meli_notifications' => $this->notifications($source, $userId),
-            'meli_tokens'        => $this->tokens($source, $userId),
-            'supplier_selection' => $this->summary($this->queue()->enqueue(RecalculateSupplierSelectionJob::TYPE, [], $source, null, $userId) !== null ? 1 : 0),
-            'supplier_stock'     => $this->suppliers(SyncSupplierStockJob::TYPE, SupplierSyncService::MODE_STOCK, $source, $userId),
-            'supplier_prices'    => $this->suppliers(SyncSupplierPricesJob::TYPE, SupplierSyncService::MODE_PRICES, $source, $userId),
-            'meli_stock'         => $this->listings($this->autoSync()->enqueueStock($source, $userId), 'Nenhum anúncio com estoque diferente do fornecedor.'),
-            'meli_prices'        => $this->listings($this->autoSync()->enqueuePrices($source, $userId), 'Nenhum anúncio com preço para conferir.'),
-            'meli_orders'        => $this->orders($source, $userId),
-            default              => throw new BusinessRuleException('Tarefa sem implementação: ' . $name),
+            'marketplace_notifications' => $this->notifications($source, $userId),
+            'marketplace_tokens'        => $this->tokens($source, $userId),
+            'supplier_selection'        => $this->summary($this->queue()->enqueue(RecalculateSupplierSelectionJob::TYPE, [], $source, null, $userId) !== null ? 1 : 0),
+            'supplier_stock'            => $this->suppliers(SyncSupplierStockJob::TYPE, SupplierSyncService::MODE_STOCK, $source, $userId),
+            'supplier_prices'           => $this->suppliers(SyncSupplierPricesJob::TYPE, SupplierSyncService::MODE_PRICES, $source, $userId),
+            'listing_stock'             => $this->listings($this->autoSync()->enqueueStock($source, $userId), 'Nenhum anúncio com estoque diferente do fornecedor.'),
+            'listing_prices'            => $this->listings($this->autoSync()->enqueuePrices($source, $userId), 'Nenhum anúncio com preço para conferir.'),
+            'marketplace_orders'        => $this->orders($source, $userId),
+            default                     => throw new BusinessRuleException('Tarefa sem implementação: ' . $name),
         };
     }
 
@@ -189,26 +191,52 @@ class Scheduler
      */
     private function notifications(string $source, ?int $userId): string
     {
-        $pending = (new WebhookEventModel())->whereIn('status', [WebhookEventModel::STATUS_PENDING, WebhookEventModel::STATUS_PROCESSING])->countAllResults();
-        if ($pending === 0 && $source === JobModel::SOURCE_SCHEDULE) {
-            return 'Nenhuma notificação na fila.';
+        $count   = 0;
+        $pending = 0;
+
+        foreach ($this->marketplaces()->supporting(MarketplaceAdapter::CAPABILITY_NOTIFICATIONS) as $slug => $adapter) {
+            $waiting  = $adapter->pendingNotifications();
+            $pending += $waiting;
+            if ($waiting === 0 && $source === JobModel::SOURCE_SCHEDULE) {
+                continue;
+            }
+
+            $reference = sprintf('%s: %d pendente(s)', $adapter->name(), $waiting);
+            $count += $this->queue()->enqueue(ProcessMarketplaceNotificationsJob::TYPE, ['marketplace' => $slug], $source, $reference, $userId) !== null ? 1 : 0;
         }
 
-        return $this->summary($this->queue()->enqueue(ProcessMercadoLivreNotificationsJob::TYPE, [], $source, $pending . ' pendente(s)', $userId) !== null ? 1 : 0);
+        return $pending === 0 && $source === JobModel::SOURCE_SCHEDULE ? 'Nenhuma notificação na fila.' : $this->summary($count);
     }
 
+    /**
+     * Cada marketplace renova com a antecedência que a sua documentação pede.
+     */
     private function tokens(string $source, ?int $userId): string
     {
-        $meli = service('mercadoLivre');
-        if (! $meli->config()->isConfigured()) {
-            return 'Integração com o Mercado Livre não configurada.';
+        $count      = 0;
+        $configured = 0;
+
+        foreach ($this->marketplaces()->supporting(MarketplaceAdapter::CAPABILITY_TOKEN_REFRESH) as $slug => $adapter) {
+            if (! $adapter->isConfigured()) {
+                continue;
+            }
+            $configured++;
+
+            $limit   = date('Y-m-d H:i:s', time() + $adapter->refreshBeforeSeconds());
+            $records = (new MarketplaceAccountModel())->expiringBefore($limit)
+                ->join('marketplaces', 'marketplaces.id = marketplace_accounts.marketplace_id')
+                ->where('marketplaces.slug', $slug)
+                ->select('marketplace_accounts.id, marketplace_accounts.name')
+                ->findAll();
+
+            foreach ($records as $account) {
+                $reference = $adapter->name() . ': ' . $account['name'];
+                $count += $this->queue()->enqueue(RefreshMarketplaceTokenJob::TYPE, ['account_id' => (int) $account['id']], $source, $reference, $userId) !== null ? 1 : 0;
+            }
         }
 
-        $limit = date('Y-m-d H:i:s', time() + config(MercadoLivre::class)->refreshBeforeSeconds);
-        $count = 0;
-
-        foreach ((new MarketplaceAccountModel())->expiringBefore($limit)->select('marketplace_accounts.id, marketplace_accounts.name')->findAll() as $account) {
-            $count += $this->queue()->enqueue(RefreshMercadoLivreTokenJob::TYPE, ['account_id' => (int) $account['id']], $source, (string) $account['name'], $userId) !== null ? 1 : 0;
+        if ($configured === 0) {
+            return 'Nenhuma integração de marketplace configurada.';
         }
 
         return $count === 0 ? 'Nenhum token perto de vencer.' : $this->summary($count);
@@ -230,14 +258,20 @@ class Scheduler
 
     private function orders(string $source, ?int $userId): string
     {
-        $count = 0;
-        foreach ((new MarketplaceAccountModel())->where('status', MarketplaceAccountModel::STATUS_CONNECTED)->where('active', 1)->findAll() as $account) {
-            $count += $this->queue()->enqueue(ImportMercadoLivreOrdersJob::TYPE, ['account_id' => (int) $account['id'], 'days' => self::ORDERS_DAYS], $source, (string) $account['name'], $userId) !== null ? 1 : 0;
+        $count    = 0;
+        $accounts = 0;
+        $service  = new MarketplaceAccountService();
+
+        foreach ($this->marketplaces()->supporting(MarketplaceAdapter::CAPABILITY_ORDERS) as $slug => $adapter) {
+            foreach ($service->connected($slug) as $account) {
+                $accounts++;
+                $payload   = ['account_id' => (int) $account['id'], 'days' => self::ORDERS_DAYS];
+                $reference = $adapter->name() . ': ' . $account['name'];
+                $count += $this->queue()->enqueue(ImportMarketplaceOrdersJob::TYPE, $payload, $source, $reference, $userId) !== null ? 1 : 0;
+            }
         }
 
-        return $count === 0 && (new MarketplaceAccountModel())->where('status', MarketplaceAccountModel::STATUS_CONNECTED)->where('active', 1)->countAllResults() === 0
-            ? 'Nenhuma conta do Mercado Livre conectada.'
-            : $this->summary($count);
+        return $accounts === 0 ? 'Nenhuma conta de marketplace conectada.' : $this->summary($count);
     }
 
     private function listings(int $count, string $empty): string
@@ -268,5 +302,10 @@ class Scheduler
     private function autoSync(): ListingAutoSync
     {
         return $this->autoSync ?? service('listingAutoSync');
+    }
+
+    private function marketplaces(): MarketplaceRegistry
+    {
+        return $this->marketplaces ?? service('marketplaces');
     }
 }

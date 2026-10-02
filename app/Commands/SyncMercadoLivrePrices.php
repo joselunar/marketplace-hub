@@ -2,7 +2,8 @@
 
 namespace App\Commands;
 
-use App\Jobs\SyncMercadoLivrePricesJob;
+use App\Jobs\SyncListingPriceJob;
+use App\Services\Marketplaces\MercadoLivre\MercadoLivreAuthService;
 use CodeIgniter\CLI\BaseCommand;
 
 /**
@@ -29,10 +30,10 @@ class SyncMercadoLivrePrices extends BaseCommand
             $params,
             'sync.auto_update_price',
             'A atualização automática de preço está desligada (Configurações > Sincronização). Use --force para executar mesmo assim.',
-            SyncMercadoLivrePricesJob::TYPE,
-            static fn (): array => service('listingAutoSync')->priceCandidates(),
+            SyncListingPriceJob::TYPE,
+            static fn (): array => service('listingAutoSync')->priceCandidates(null, MercadoLivreAuthService::SLUG),
             static function (int $listingId): string {
-                $listing = service('mercadoLivreProducts')->updatePrice($listingId, null, true);
+                $listing = service('marketplaces')->get(MercadoLivreAuthService::SLUG)->updateListingPrice($listingId, null, true);
 
                 return 'preço R$ ' . number_format((float) $listing['price'], 2, ',', '.') . '.';
             },

@@ -3,7 +3,7 @@
 namespace Tests\Database\Automation;
 
 use App\Exceptions\BusinessRuleException;
-use App\Jobs\ProcessMercadoLivreNotificationsJob;
+use App\Jobs\ProcessMarketplaceNotificationsJob;
 use App\Jobs\RecalculateSupplierSelectionJob;
 use App\Models\ScheduledTaskModel;
 use App\Services\Automation\Scheduler;
@@ -27,15 +27,15 @@ final class SchedulerTest extends DatabaseTestCase
         $results = $this->scheduler->runDue($now);
 
         $this->assertArrayHasKey('supplier_selection', $results);
-        $this->assertArrayNotHasKey('meli_stock', $results, 'atualização automática desligada por padrão');
-        $this->assertArrayNotHasKey('meli_prices', $results);
-        $this->assertSame('Nenhuma notificação na fila.', $results['meli_notifications']['message']);
+        $this->assertArrayNotHasKey('listing_stock', $results, 'atualização automática desligada por padrão');
+        $this->assertArrayNotHasKey('listing_prices', $results);
+        $this->assertSame('Nenhuma notificação na fila.', $results['marketplace_notifications']['message']);
         $this->assertSame(1, $this->db->table('jobs')->where('type', RecalculateSupplierSelectionJob::TYPE)->countAllResults());
         $this->seeInDatabase('scheduled_tasks', ['name' => ScheduledTaskModel::SCHEDULER, 'last_status' => 'success']);
         $this->assertFalse(service('jobQueue')->heartbeat()['scheduler_late']);
 
         $this->assertSame([], $this->scheduler->runDue($now + 30), 'nenhuma tarefa vence em 30 segundos');
-        $this->assertSame(['meli_notifications'], array_keys($this->scheduler->runDue($now + 60)), 'só a tarefa de minuto em minuto');
+        $this->assertSame(['marketplace_notifications'], array_keys($this->scheduler->runDue($now + 60)), 'só a tarefa de minuto em minuto');
 
         $later = $this->scheduler->runDue($now + 3600);
         $this->assertArrayHasKey('supplier_selection', $later);
@@ -51,18 +51,18 @@ final class SchedulerTest extends DatabaseTestCase
 
         $results = $this->scheduler->runDue();
 
-        $this->assertSame('1 job(s) enfileirado(s).', $results['meli_notifications']['message']);
-        $this->seeInDatabase('jobs', ['type' => ProcessMercadoLivreNotificationsJob::TYPE, 'reference' => '1 pendente(s)']);
+        $this->assertSame('1 job(s) enfileirado(s).', $results['marketplace_notifications']['message']);
+        $this->seeInDatabase('jobs', ['type' => ProcessMarketplaceNotificationsJob::TYPE, 'reference' => 'Mercado Livre: 1 pendente(s)']);
     }
 
     public function testListingTasksDependOnTheAutoUpdateSettings(): void
     {
         $tasks = array_column($this->scheduler->overview(), null, 'name');
-        $this->assertFalse($tasks['meli_stock']['enabled']);
-        $this->assertStringContainsString('desligada', $tasks['meli_stock']['disabled_why']);
+        $this->assertFalse($tasks['listing_stock']['enabled']);
+        $this->assertStringContainsString('desligada', $tasks['listing_stock']['disabled_why']);
 
         try {
-            $this->scheduler->runNow('meli_stock');
+            $this->scheduler->runNow('listing_stock');
             $this->fail('Sem a configuração ligada a tarefa não roda.');
         } catch (BusinessRuleException $e) {
             $this->assertStringContainsString('Configurações', $e->getMessage());
@@ -73,10 +73,10 @@ final class SchedulerTest extends DatabaseTestCase
         $scheduler = new Scheduler();
 
         $tasks = array_column($scheduler->overview(), null, 'name');
-        $this->assertTrue($tasks['meli_stock']['enabled']);
-        $this->assertSame(30, $tasks['meli_stock']['interval']);
+        $this->assertTrue($tasks['listing_stock']['enabled']);
+        $this->assertSame(30, $tasks['listing_stock']['interval']);
         $this->assertFalse($tasks['supplier_stock']['enabled'], 'intervalo zero desliga a tarefa');
-        $this->assertSame('Nenhum anúncio com estoque diferente do fornecedor.', $scheduler->runNow('meli_stock')['message']);
+        $this->assertSame('Nenhum anúncio com estoque diferente do fornecedor.', $scheduler->runNow('listing_stock')['message']);
     }
 
     public function testUnknownTaskIsRejected(): void

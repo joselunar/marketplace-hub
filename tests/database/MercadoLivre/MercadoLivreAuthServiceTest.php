@@ -3,6 +3,8 @@
 namespace Tests\Database\MercadoLivre;
 
 use App\Exceptions\BusinessRuleException;
+use App\Jobs\RefreshMarketplaceTokenJob;
+use App\Models\JobModel;
 use App\Models\MarketplaceAccountModel;
 use App\Services\Marketplaces\MarketplaceAccountService;
 use App\Services\Marketplaces\MercadoLivre\MercadoLivreApiClient;
@@ -12,6 +14,7 @@ use App\Services\Marketplaces\MercadoLivre\MercadoLivreService;
 use App\Services\Marketplaces\MercadoLivre\Pkce;
 use CodeIgniter\I18n\Time;
 use Config\MercadoLivre;
+use Config\Services;
 use Tests\Support\DatabaseTestCase;
 use Tests\Support\FakeMercadoLivreTransport;
 
@@ -175,6 +178,25 @@ final class MercadoLivreAuthServiceTest extends DatabaseTestCase
         $this->assertSame('2026-10-02 21:45:00', $account['token_expires_at']);
         $this->assertNoTokenLeaks();
         $this->seeInDatabase('sync_logs', ['action' => 'token_refresh', 'status' => 'success', 'integration_id' => $id]);
+    }
+
+    public function testTokenJobRefreshesThroughTheMarketplaceAdapter(): void
+    {
+        $id = $this->connect();
+        Time::setTestNow('2026-10-02 15:45:00');
+        Services::injectMock('mercadoLivre', new MercadoLivreService($this->config, null, $this->auth, $this->accounts));
+
+        $this->transport->push(200, FakeMercadoLivreTransport::tokenResponse('APP_USR-8888-fila-123456', 'TG-fila-123456'));
+        $queue = service('jobQueue');
+        $queue->enqueue(RefreshMarketplaceTokenJob::TYPE, ['account_id' => $id]);
+        $queue->work(5, 30);
+
+        $job = $this->db->table('jobs')->get()->getRowArray();
+        $this->assertSame(JobModel::STATUS_COMPLETED, $job['status']);
+        $this->assertSame('Mercado Livre, conta LOJA_TESTE: token válido até 02/10/2026 21:45.', $job['result']);
+        $this->assertSame('APP_USR-8888-fila-123456', $this->accounts->accessToken($this->accounts->findOrFail($id)));
+        $this->assertStringNotContainsString('APP_USR-', json_encode($job));
+        $this->assertNoTokenLeaks();
     }
 
     public function testRefreshIsSkippedWhileTokenIsFreshUnlessForced(): void

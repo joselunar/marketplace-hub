@@ -3,10 +3,10 @@
 namespace App\Controllers;
 
 use App\Exceptions\BusinessRuleException;
-use App\Models\MarketplaceAccountModel;
 use App\Models\OrderModel;
-use App\Services\Marketplaces\MercadoLivre\MercadoLivreApiException;
-use App\Services\Marketplaces\MercadoLivre\MercadoLivreAuthService;
+use App\Services\Marketplaces\Contracts\MarketplaceAdapter;
+use App\Services\Marketplaces\Contracts\MarketplaceApiError;
+use App\Services\Marketplaces\MarketplaceAccountService;
 use App\Services\Orders\OrderProfitCalculator;
 use App\Services\Orders\OrderService;
 use CodeIgniter\HTTP\RedirectResponse;
@@ -72,14 +72,14 @@ class OrderController extends BaseController
             $accountId = count($accounts) === 1 ? (int) $accounts[0]['id'] : 0;
         }
         if ($accountId <= 0) {
-            return redirect()->to(self::HOME)->with('error', 'Escolha a conta do Mercado Livre.');
+            return redirect()->to(self::HOME)->with('error', 'Escolha a conta do marketplace.');
         }
 
         try {
-            $stats = service('mercadoLivreOrders')->importRecent($accountId, $days > 0 ? $days : 7, (int) $this->auth()->id());
+            $stats = service('marketplaces')->forAccount($accountId)->importRecentOrders($accountId, $days > 0 ? $days : 7, (int) $this->auth()->id());
         } catch (BusinessRuleException $e) {
             return redirect()->to(self::HOME)->with('error', $e->getMessage());
-        } catch (MercadoLivreApiException $e) {
+        } catch (MarketplaceApiError $e) {
             return redirect()->to(self::HOME)->with('error', $e->userMessage());
         }
 
@@ -92,15 +92,16 @@ class OrderController extends BaseController
     }
 
     /**
-     * Relê o pedido no Mercado Livre.
+     * Relê o pedido no marketplace de origem.
      */
     public function sync(int $id): RedirectResponse
     {
         return $this->action($id, function () use ($id): string {
-            $order = $this->orders()->findOrFail($id);
-            service('mercadoLivreOrders')->import((int) $order['marketplace_account_id'], $order['external_order_id']);
+            $order   = $this->orders()->findOrFail($id);
+            $adapter = service('marketplaces')->forAccount((int) $order['marketplace_account_id']);
+            $adapter->importOrder((int) $order['marketplace_account_id'], $order['external_order_id']);
 
-            return 'Pedido atualizado com os dados do Mercado Livre.';
+            return sprintf('Pedido atualizado com os dados mais recentes (%s).', $adapter->name());
         });
     }
 
@@ -157,7 +158,7 @@ class OrderController extends BaseController
             $message = $operation((int) $this->auth()->id());
         } catch (BusinessRuleException $e) {
             return redirect()->to($back)->with('error', $e->getMessage());
-        } catch (MercadoLivreApiException $e) {
+        } catch (MarketplaceApiError $e) {
             return redirect()->to($back)->with('error', $e->userMessage());
         }
 
@@ -178,11 +179,16 @@ class OrderController extends BaseController
         return is_string($value) ? mb_substr($value, 0, 1000) : null;
     }
 
+    /**
+     * Contas conectadas dos marketplaces que importam pedidos.
+     */
     private function connectedAccounts(): array
     {
+        $slugs = array_keys(service('marketplaces')->supporting(MarketplaceAdapter::CAPABILITY_ORDERS));
+
         return array_values(array_filter(
-            service('mercadoLivre')->accounts()->listFor(MercadoLivreAuthService::SLUG),
-            static fn (array $account): bool => $account['status'] === MarketplaceAccountModel::STATUS_CONNECTED && (int) $account['active'] === 1,
+            (new MarketplaceAccountService())->connected(),
+            static fn (array $account): bool => in_array($account['marketplace_slug'], $slugs, true),
         ));
     }
 

@@ -39,12 +39,13 @@ class LogController extends BaseController
         }
 
         return view('logs/index', [
-            'title'       => 'Logs',
-            'tab'         => $tab,
-            'rows'        => $rows,
-            'filters'     => $filters,
-            'pager'       => $model->pager,
-            'breadcrumbs' => ['Sistema' => null, 'Logs' => null],
+            'title'               => 'Logs',
+            'tab'                 => $tab,
+            'rows'                => $rows,
+            'filters'             => $filters,
+            'pager'               => $model->pager,
+            'marketplaceAdapters' => service('marketplaces')->all(),
+            'breadcrumbs'         => ['Sistema' => null, 'Logs' => null],
         ]);
     }
 }

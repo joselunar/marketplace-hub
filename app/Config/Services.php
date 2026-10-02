@@ -7,8 +7,9 @@ use App\Services\Auth\AuthService;
 use App\Services\Automation\JobQueue;
 use App\Services\Automation\ListingAutoSync;
 use App\Services\Automation\Scheduler;
-use App\Services\Marketplaces\MercadoLivre\Http\CurlTransport;
-use App\Services\Marketplaces\MercadoLivre\Http\HttpTransport;
+use App\Services\Http\CurlTransport;
+use App\Services\Http\HttpTransport;
+use App\Services\Marketplaces\MarketplaceRegistry;
 use App\Services\Marketplaces\MercadoLivre\MercadoLivreNotificationService;
 use App\Services\Marketplaces\MercadoLivre\MercadoLivreOrderService;
 use App\Services\Marketplaces\MercadoLivre\MercadoLivreProductService;
@@ -73,6 +74,15 @@ class Services extends BaseService
         }
 
         return new SupplierSelectionService();
+    }
+
+    public static function marketplaces(bool $getShared = true): MarketplaceRegistry
+    {
+        if ($getShared) {
+            return static::getSharedInstance('marketplaces');
+        }
+
+        return new MarketplaceRegistry();
     }
 
     public static function mercadoLivre(bool $getShared = true): MercadoLivreService

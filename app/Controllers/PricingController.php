@@ -11,18 +11,21 @@ use CodeIgniter\HTTP\ResponseInterface;
  */
 class PricingController extends BaseController
 {
-    private const FIELDS = ['cost_price', 'shipping_cost', 'extra_cost', 'category_id', 'desired_margin_percentage', 'minimum_margin_percentage', 'sale_price'];
+    private const FIELDS = ['cost_price', 'shipping_cost', 'extra_cost', 'category_id', 'marketplace', 'desired_margin_percentage', 'minimum_margin_percentage', 'sale_price'];
 
     public function index(): string
     {
-        $input = $this->input();
+        $input        = $this->input();
+        $marketplaces = service('marketplaces')->names();
+        $marketplace  = isset($marketplaces[$input['marketplace']]) ? $input['marketplace'] : null;
 
         return view('pricing/index', [
-            'title'       => 'Simulador de preços',
-            'input'       => $input,
-            'categories'  => (new CategoryModel())->dropdownOptions(),
-            'config'      => service('pricing')->config(),
-            'breadcrumbs' => ['Catálogo' => null, 'Simulador de preços' => null],
+            'title'        => 'Simulador de preços',
+            'input'        => $input,
+            'categories'   => (new CategoryModel())->dropdownOptions(),
+            'marketplaces' => $marketplaces,
+            'config'       => service('pricing')->config($marketplace),
+            'breadcrumbs'  => ['Catálogo' => null, 'Simulador de preços' => null],
         ] + $this->simulate($input));
     }
 

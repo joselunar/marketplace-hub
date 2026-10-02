@@ -116,7 +116,7 @@ class MercadoLivreNotificationService
         $this->releaseStale();
 
         $stats = ['processed' => 0, 'failed' => 0, 'retry' => 0];
-        $ids   = array_column($this->events->select('id')->where('status', Events::STATUS_PENDING)->orderBy('id')->findAll(max(1, min(500, $limit))), 'id');
+        $ids   = array_column($this->events->select('id')->where('provider', self::PROVIDER)->where('status', Events::STATUS_PENDING)->orderBy('id')->findAll(max(1, min(500, $limit))), 'id');
 
         foreach ($ids as $id) {
             $result = $this->process((int) $id);
@@ -126,6 +126,16 @@ class MercadoLivreNotificationService
         }
 
         return $stats;
+    }
+
+    /**
+     * Notificações esperando processamento (inclusive as em andamento).
+     */
+    public function pendingCount(): int
+    {
+        return $this->events->where('provider', self::PROVIDER)
+            ->whereIn('status', [Events::STATUS_PENDING, Events::STATUS_PROCESSING])
+            ->countAllResults();
     }
 
     /**
@@ -261,6 +271,7 @@ class MercadoLivreNotificationService
     private function releaseStale(): void
     {
         $this->events->builder()
+            ->where('provider', self::PROVIDER)
             ->where('status', Events::STATUS_PROCESSING)
             ->where('locked_at <', date('Y-m-d H:i:s', time() - $this->config->notificationLockSeconds))
             ->update(['status' => Events::STATUS_PENDING, 'locked_at' => null]);

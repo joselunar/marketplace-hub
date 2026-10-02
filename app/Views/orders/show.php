@@ -23,7 +23,7 @@ $canRealloc = $paid && ! $fraud && $placed === [];
         </div>
     </div>
     <div class="d-flex flex-wrap gap-2">
-        <form action="<?= site_url('orders/' . $order['id'] . '/sync') ?>" method="post"><?= csrf_field() ?><button class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Atualizar do Mercado Livre</button></form>
+        <form action="<?= site_url('orders/' . $order['id'] . '/sync') ?>" method="post"><?= csrf_field() ?><button class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Atualizar pedido</button></form>
         <?php if ($canRealloc): ?>
             <form action="<?= site_url('orders/' . $order['id'] . '/reallocate') ?>" method="post" data-confirm="Desfazer as reservas não enviadas e escolher os fornecedores de novo, com estoque e preços atuais?">
                 <?= csrf_field() ?><button class="btn btn-sm btn-outline-primary"><i class="bi bi-shuffle"></i> Revalidar fornecedores</button>
@@ -33,7 +33,7 @@ $canRealloc = $paid && ! $fraud && $placed === [];
 </div>
 
 <?php if ($fraud): ?>
-    <div class="alert alert-danger small"><i class="bi bi-shield-exclamation me-1"></i> O Mercado Livre sinalizou <strong>risco de fraude</strong> nesta venda. A orientação oficial é não enviar a mercadoria e cancelar a venda.</div>
+    <div class="alert alert-danger small"><i class="bi bi-shield-exclamation me-1"></i> O marketplace (<?= esc($order['marketplace_name']) ?>) sinalizou <strong>risco de fraude</strong> nesta venda. A orientação oficial é não enviar a mercadoria e cancelar a venda.</div>
 <?php elseif (! empty($order['issue'])): ?>
     <div class="alert alert-warning small"><i class="bi bi-exclamation-triangle me-1"></i> <?= esc($order['issue']) ?></div>
 <?php elseif (! $paid && ! in_array($order['status'], OrderModel::CANCELLED_STATUSES, true)): ?>
@@ -69,13 +69,13 @@ $canRealloc = $paid && ! $fraud && $placed === [];
                     <dt class="col-6">Total da venda</dt><dd class="col-6 fw-semibold"><?= money($order['total_amount']) ?> <?= esc($order['currency_id']) ?></dd>
                     <dt class="col-6">Valor pago</dt><dd class="col-6"><?= money($order['paid_amount']) ?></dd>
                     <dt class="col-6">Frete pago pelo comprador</dt><dd class="col-6"><?= money($order['shipping_amount']) ?></dd>
-                    <dt class="col-6">Tarifas do Mercado Livre</dt>
-                    <dd class="col-6"><?= money($order['marketplace_fees']) ?><?= (int) $order['fees_estimated'] === 1 ? ' <span class="badge text-bg-light border" title="O Mercado Livre informa a tarifa quando o pagamento é creditado; até lá usamos a comissão do anúncio ou das configurações.">estimada</span>' : '' ?></dd>
+                    <dt class="col-6">Tarifas do marketplace</dt>
+                    <dd class="col-6"><?= money($order['marketplace_fees']) ?><?= (int) $order['fees_estimated'] === 1 ? ' <span class="badge text-bg-light border" title="O marketplace informa a tarifa quando o pagamento é creditado; até lá usamos a comissão do anúncio ou a configurada para o marketplace.">estimada</span>' : '' ?></dd>
                     <dt class="col-6">Custo nos fornecedores</dt><dd class="col-6"><?= money($order['supplier_cost']) ?></dd>
                     <dt class="col-6">Lucro estimado</dt><dd class="col-6 fw-semibold"><?= money($order['estimated_profit']) ?></dd>
                     <dt class="col-6">Margem</dt><dd class="col-6"><?= percent_format($margin) ?></dd>
                 </dl>
-                <div class="small text-body-secondary mt-2">Inclui impostos e custos extras das configurações de precificação. O frete pago pelo vendedor ao Mercado Livre não entra, pois não vem no pedido.</div>
+                <div class="small text-body-secondary mt-2">Inclui impostos e custos extras das configurações de precificação. O frete pago pelo vendedor ao marketplace não entra, pois não vem no pedido.</div>
             </div>
         </div>
     </div>

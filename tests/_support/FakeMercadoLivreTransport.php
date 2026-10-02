@@ -2,9 +2,9 @@
 
 namespace Tests\Support;
 
-use App\Services\Marketplaces\MercadoLivre\Http\HttpResponse;
-use App\Services\Marketplaces\MercadoLivre\Http\HttpTransport;
-use App\Services\Marketplaces\MercadoLivre\Http\TransportException;
+use App\Services\Http\HttpResponse;
+use App\Services\Http\HttpTransport;
+use App\Services\Http\TransportException;
 use RuntimeException;
 
 /**

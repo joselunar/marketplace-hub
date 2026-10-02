@@ -2,6 +2,7 @@
 
 namespace App\Services\Marketplaces\MercadoLivre;
 
+use App\Services\Marketplaces\Contracts\MarketplaceApiError;
 use RuntimeException;
 use Throwable;
 
@@ -11,7 +12,7 @@ use Throwable;
  * A mensagem nunca carrega tokens: vem do corpo de erro da API, que só
  * traz código, descrição e, nas validações de anúncio, a lista "cause".
  */
-class MercadoLivreApiException extends RuntimeException
+class MercadoLivreApiException extends RuntimeException implements MarketplaceApiError
 {
     /**
      * Códigos de erro descritos na documentação de autenticação e de publicação.
@@ -77,6 +78,12 @@ class MercadoLivreApiException extends RuntimeException
     public function requiresReauthorization(): bool
     {
         return in_array($this->errorCode, self::REAUTHORIZE, true);
+    }
+
+    public function isTemporary(): bool
+    {
+        return ! $this->requiresReauthorization()
+            && ($this->status === 0 || $this->status === 429 || $this->status >= 500);
     }
 
     /**

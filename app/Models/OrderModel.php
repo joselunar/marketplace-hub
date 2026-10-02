@@ -72,10 +72,11 @@ class OrderModel extends Model
     public function withAccount(): static
     {
         $this->select(
-            'orders.*, marketplace_accounts.name AS account_name, '
+            'orders.*, marketplace_accounts.name AS account_name, marketplaces.name AS marketplace_name, marketplaces.slug AS marketplace_slug, '
             . '(SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = orders.id) AS items_count, '
             . '(SELECT oi.title FROM order_items oi WHERE oi.order_id = orders.id ORDER BY oi.id LIMIT 1) AS first_item_title',
-        )->join('marketplace_accounts', 'marketplace_accounts.id = orders.marketplace_account_id');
+        )->join('marketplace_accounts', 'marketplace_accounts.id = orders.marketplace_account_id')
+            ->join('marketplaces', 'marketplaces.id = orders.marketplace_id');
 
         return $this;
     }

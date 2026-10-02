@@ -43,6 +43,7 @@ class Navigation extends BaseConfig
         [
             'label' => 'Marketplaces',
             'items' => [
+                ['label' => 'Visão geral', 'icon' => 'grid', 'url' => 'marketplaces', 'prefix' => 'marketplaces', 'exclude' => 'marketplaces/mercadolivre'],
                 ['label' => 'Mercado Livre', 'icon' => 'shop', 'url' => 'marketplaces/mercadolivre', 'prefix' => 'marketplaces/mercadolivre', 'exclude' => 'marketplaces/mercadolivre/listings'],
                 ['label' => 'Anúncios', 'icon' => 'megaphone', 'url' => 'marketplaces/mercadolivre/listings', 'prefix' => 'marketplaces/mercadolivre/listings'],
             ],

@@ -103,8 +103,9 @@
                         <td class="small">
                             <?php if ($row['integration_type'] === 'supplier' && $row['integration_id']): ?>
                                 <a href="<?= site_url('suppliers/' . (int) $row['integration_id']) ?>">Fornecedor #<?= (int) $row['integration_id'] ?></a>
-                            <?php elseif ($row['integration_type'] === 'mercadolivre'): ?>
-                                <a href="<?= site_url('marketplaces/mercadolivre') ?>">Mercado Livre<?= $row['integration_id'] ? ' · conta #' . (int) $row['integration_id'] : '' ?></a>
+                            <?php elseif (isset($marketplaceAdapters[$row['integration_type']])): ?>
+                                <?php $adapter = $marketplaceAdapters[$row['integration_type']]; ?>
+                                <a href="<?= site_url($adapter->accountsPath()) ?>"><?= esc($adapter->name()) ?><?= $row['integration_id'] ? ' · conta #' . (int) $row['integration_id'] : '' ?></a>
                             <?php elseif ($row['integration_type'] === 'automation'): ?>
                                 <a href="<?= site_url('sync?status=failed') ?>">Automação<?= $row['integration_id'] ? ' · job #' . (int) $row['integration_id'] : '' ?></a>
                             <?php else: ?>

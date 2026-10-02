@@ -85,6 +85,9 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
         $routes->get('(:num)', 'SupplierImportController::show/$1');
     });
 
+    $routes->get('marketplaces', 'MarketplaceController::index');
+    $routes->post('marketplaces/(:segment)/fees', 'MarketplaceController::updateFees/$1', ['filter' => 'role:admin']);
+
     $routes->group('marketplaces/mercadolivre', static function (RouteCollection $routes): void {
         $routes->get('/', 'MercadoLivreController::index');
         $routes->get('categories', 'MercadoLivreCategoryController::index');
@@ -144,6 +147,7 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api', 'filter' => 'auth']
     $routes->get('pricing/simulate', 'PricingController::simulate');
     $routes->get('suppliers', 'SupplierController::index');
     $routes->get('suppliers/(:num)', 'SupplierController::show/$1');
+    $routes->get('marketplaces', 'MarketplaceController::index');
     $routes->get('marketplaces/accounts', 'MarketplaceAccountController::index');
     $routes->get('orders', 'OrderController::index');
     $routes->get('orders/(:num)', 'OrderController::show/$1');

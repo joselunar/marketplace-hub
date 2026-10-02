@@ -8,8 +8,8 @@ use App\Jobs\JobInterface;
 use App\Models\JobModel;
 use App\Models\ScheduledTaskModel;
 use App\Models\SyncLogModel;
-use App\Services\Marketplaces\MercadoLivre\Http\TransportException;
-use App\Services\Marketplaces\MercadoLivre\MercadoLivreApiException;
+use App\Services\Http\TransportException;
+use App\Services\Marketplaces\Contracts\MarketplaceApiError;
 use App\Services\Suppliers\Connectors\UnsupportedOperationException;
 use CodeIgniter\Database\BaseConnection;
 use Config\Automation;
@@ -320,9 +320,8 @@ class JobQueue
     public function isRetryable(Throwable $e): bool
     {
         for ($current = $e; $current !== null; $current = $current->getPrevious()) {
-            if ($current instanceof MercadoLivreApiException) {
-                return ! $current->requiresReauthorization()
-                    && ($current->status === 0 || $current->status === 429 || $current->status >= 500);
+            if ($current instanceof MarketplaceApiError) {
+                return $current->isTemporary();
             }
             if ($current instanceof TransportException) {
                 return true;
@@ -452,7 +451,7 @@ class JobQueue
     private function messageFor(Throwable $e): string
     {
         $message = match (true) {
-            $e instanceof MercadoLivreApiException => $e->userMessage(),
+            $e instanceof MarketplaceApiError => $e->userMessage(),
             $e instanceof BusinessRuleException,
             $e instanceof UnsupportedOperationException,
             $e instanceof InvalidArgumentException => $e->getMessage(),

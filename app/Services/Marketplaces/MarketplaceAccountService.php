@@ -9,7 +9,6 @@ use App\Models\MarketplaceModel;
 use App\Services\Audit\AuditService;
 use App\Services\Security\TokenCipher;
 use CodeIgniter\I18n\Time;
-use Config\Marketplaces;
 
 /**
  * Contas conectadas a marketplaces. Único ponto que lê ou grava as colunas
@@ -35,12 +34,12 @@ class MarketplaceAccountService
             return $marketplace;
         }
 
-        $name = config(Marketplaces::class)->registry[$slug] ?? null;
-        if ($name === null) {
+        $registry = service('marketplaces');
+        if (! $registry->has($slug)) {
             throw new BusinessRuleException('Marketplace desconhecido: ' . $slug);
         }
 
-        $this->marketplaces->insert(['name' => $name, 'slug' => $slug, 'active' => 1]);
+        $this->marketplaces->insert(['name' => $registry->get($slug)->name(), 'slug' => $slug, 'active' => 1]);
 
         return $this->marketplaces->find((int) $this->marketplaces->getInsertID());
     }
@@ -88,6 +87,26 @@ class MarketplaceAccountService
             ->where('active', 1)
             ->orderBy('id')
             ->first();
+    }
+
+    /**
+     * Contas conectadas e ativas, de um marketplace ou de todos, prontas para exibição.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function connected(?string $slug = null): array
+    {
+        $query = $this->accounts->withMarketplace()
+            ->where('marketplace_accounts.status', MarketplaceAccountModel::STATUS_CONNECTED)
+            ->where('marketplace_accounts.active', 1)
+            ->orderBy('marketplaces.name')
+            ->orderBy('marketplace_accounts.name');
+
+        if ($slug !== null) {
+            $query->where('marketplaces.slug', $slug);
+        }
+
+        return array_map($this->present(...), $query->findAll());
     }
 
     /**

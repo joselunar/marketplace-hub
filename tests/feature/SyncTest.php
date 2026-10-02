@@ -43,7 +43,7 @@ final class SyncTest extends FeatureTestCase
         $result->assertSessionHas('success', '1 job(s) enfileirado(s). O worker do cron executa em até um minuto.');
         $this->seeInDatabase('jobs', ['type' => RecalculateSupplierSelectionJob::TYPE, 'source' => JobModel::SOURCE_MANUAL, 'created_by' => $user['id']]);
 
-        $blocked = $this->actingAs($user)->post('sync/tasks/meli_stock/run');
+        $blocked = $this->actingAs($user)->post('sync/tasks/listing_stock/run');
         $blocked->assertSessionHas('error');
 
         $page = $this->actingAs($user)->get('sync');
@@ -107,11 +107,11 @@ final class SyncTest extends FeatureTestCase
         $page->assertSee('Anúncios ativos');
         $page->assertSee('O agendador nunca rodou');
         $page->assertSee('1 job(s) de sincronização falharam');
-        $page->assertSee('1 conta(s) do Mercado Livre com token vencendo nos próximos minutos');
+        $page->assertSee('1 conta(s) de marketplace com token vencendo nos próximos minutos');
         $page->assertSee('Vendas dos últimos 14 dias');
         $page->assertSee('Produtos com maior lucro (30 dias)');
         $page->assertSee('Pedidos recentes');
-        $page->assertSee('Fase 9');
+        $page->assertSee('Ver todos');
 
         service('scheduler')->runDue();
         $this->actingAs($this->createUser('operator'))->get('dashboard')->assertDontSee('O agendador nunca rodou');

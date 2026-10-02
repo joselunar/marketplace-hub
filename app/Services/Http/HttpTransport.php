@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\Marketplaces\MercadoLivre\Http;
+namespace App\Services\Http;
 
 /**
  * Envio HTTP cru. Existe para que os testes troquem a rede por respostas

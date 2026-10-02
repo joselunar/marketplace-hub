@@ -133,8 +133,8 @@ $accounts   = $summary['marketplaceAccounts'];
                 <?php endif ?>
                 <?php if ($accounts['expiring'] > 0): ?>
                     <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-hourglass-split text-warning me-2"></i><?= $accounts['expiring'] ?> conta(s) do Mercado Livre com token vencendo nos próximos minutos sem renovação</span>
-                        <a href="<?= site_url('marketplaces/mercadolivre') ?>" class="btn btn-sm btn-outline-secondary">Ver</a>
+                        <span><i class="bi bi-hourglass-split text-warning me-2"></i><?= $accounts['expiring'] ?> conta(s) de marketplace com token vencendo nos próximos minutos sem renovação</span>
+                        <a href="<?= site_url('marketplaces') ?>" class="btn btn-sm btn-outline-secondary">Ver</a>
                     </li>
                 <?php endif ?>
                 <?php if ($orders['awaitingSupplier'] > 0): ?>
@@ -184,14 +184,14 @@ $accounts   = $summary['marketplaceAccounts'];
                 <?php endif ?>
                 <?php if ($summary['marketplaceAccounts']['reconnect'] > 0): ?>
                     <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-plug text-danger me-2"></i><?= $summary['marketplaceAccounts']['reconnect'] ?> conta(s) do Mercado Livre precisam ser reconectadas (autorização revogada ou expirada)</span>
-                        <a href="<?= site_url('marketplaces/mercadolivre') ?>" class="btn btn-sm btn-outline-secondary">Ver</a>
+                        <span><i class="bi bi-plug text-danger me-2"></i><?= $summary['marketplaceAccounts']['reconnect'] ?> conta(s) de marketplace precisam ser reconectadas (autorização revogada ou expirada)</span>
+                        <a href="<?= site_url('marketplaces') ?>" class="btn btn-sm btn-outline-secondary">Ver</a>
                     </li>
                 <?php endif ?>
                 <?php if ($summary['marketplaceAccounts']['expired'] > 0): ?>
                     <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-hourglass-bottom text-warning me-2"></i><?= $summary['marketplaceAccounts']['expired'] ?> conta(s) do Mercado Livre com token vencido (confira o cron do agendador)</span>
-                        <a href="<?= site_url('marketplaces/mercadolivre') ?>" class="btn btn-sm btn-outline-secondary">Ver</a>
+                        <span><i class="bi bi-hourglass-bottom text-warning me-2"></i><?= $summary['marketplaceAccounts']['expired'] ?> conta(s) de marketplace com token vencido (confira o cron do agendador)</span>
+                        <a href="<?= site_url('marketplaces') ?>" class="btn btn-sm btn-outline-secondary">Ver</a>
                     </li>
                 <?php endif ?>
                 <?php foreach ($summary['recentSyncErrors'] as $log): ?>
@@ -257,13 +257,18 @@ $accounts   = $summary['marketplaceAccounts'];
             </ul>
         </div>
         <div class="card">
-            <div class="card-header bg-white fw-semibold"><i class="bi bi-signpost-split me-1"></i> Próximos módulos</div>
-            <div class="card-body small text-body-secondary">
-                <p class="mb-2">Próxima entrega:</p>
-                <ul class="mb-0">
-                    <li>Outros marketplaces com interface comum de integração (Fase 9)</li>
-                </ul>
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><i class="bi bi-shop me-1"></i> Marketplaces</span>
+                <a href="<?= site_url('marketplaces') ?>" class="small">Ver todos</a>
             </div>
+            <ul class="list-group list-group-flush small">
+                <?php foreach ($marketplaceAdapters as $adapter): ?>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <a href="<?= site_url($adapter->accountsPath()) ?>" class="text-decoration-none"><?= esc($adapter->name()) ?></a>
+                        <?= $adapter->isConfigured() ? badge('Configurado', 'success') : badge('Não configurado', 'warning') ?>
+                    </li>
+                <?php endforeach ?>
+            </ul>
         </div>
     </div>
 </div>

@@ -2,11 +2,13 @@
 
 namespace App\Services\Automation;
 
-use App\Jobs\SyncMercadoLivrePricesJob;
-use App\Jobs\SyncMercadoLivreStockJob;
+use App\Jobs\SyncListingPriceJob;
+use App\Jobs\SyncListingStockJob;
 use App\Models\JobModel;
 use App\Models\MarketplaceAccountModel;
 use App\Models\MarketplaceListingModel as Listings;
+use App\Services\Marketplaces\Contracts\MarketplaceAdapter;
+use App\Services\Marketplaces\MarketplaceRegistry;
 use App\Services\Settings\SettingsService;
 use App\Services\Suppliers\SupplierSelectionService;
 use CodeIgniter\Database\BaseBuilder;
@@ -31,6 +33,7 @@ class ListingAutoSync
     public function __construct(
         private readonly ?SettingsService $settings = null,
         private readonly ?JobQueue $queue = null,
+        private readonly ?MarketplaceRegistry $marketplaces = null,
     ) {
     }
 
@@ -54,10 +57,10 @@ class ListingAutoSync
         $count = 0;
 
         if ($this->stockEnabled()) {
-            $count += $this->enqueue(SyncMercadoLivreStockJob::TYPE, $this->stockCandidates($productId), JobModel::SOURCE_EVENT);
+            $count += $this->enqueue(SyncListingStockJob::TYPE, $this->stockCandidates($productId), JobModel::SOURCE_EVENT);
         }
         if ($priceChanged && $this->priceEnabled()) {
-            $count += $this->enqueue(SyncMercadoLivrePricesJob::TYPE, $this->priceCandidates($productId), JobModel::SOURCE_EVENT);
+            $count += $this->enqueue(SyncListingPriceJob::TYPE, $this->priceCandidates($productId), JobModel::SOURCE_EVENT);
         }
 
         return $count;
@@ -68,7 +71,7 @@ class ListingAutoSync
      */
     public function enqueueStock(string $source, ?int $userId = null): int
     {
-        return $this->enqueue(SyncMercadoLivreStockJob::TYPE, $this->stockCandidates(), $source, $userId);
+        return $this->enqueue(SyncListingStockJob::TYPE, $this->stockCandidates(), $source, $userId);
     }
 
     /**
@@ -76,7 +79,7 @@ class ListingAutoSync
      */
     public function enqueuePrices(string $source, ?int $userId = null): int
     {
-        return $this->enqueue(SyncMercadoLivrePricesJob::TYPE, $this->priceCandidates(), $source, $userId);
+        return $this->enqueue(SyncListingPriceJob::TYPE, $this->priceCandidates(), $source, $userId);
     }
 
     /**
@@ -85,9 +88,9 @@ class ListingAutoSync
      *
      * @return list<array{id: int, external_listing_id: string}>
      */
-    public function stockCandidates(?int $productId = null): array
+    public function stockCandidates(?int $productId = null, ?string $marketplace = null): array
     {
-        $builder = $this->baseQuery($productId)
+        $builder = $this->baseQuery(MarketplaceAdapter::CAPABILITY_STOCK, $productId, $marketplace)
             ->join('supplier_offers so', 'so.id = p.selected_offer_id', 'left')
             ->groupStart()
                 ->where('ml.available_quantity IS NULL', null, false)
@@ -103,17 +106,27 @@ class ListingAutoSync
      *
      * @return list<array{id: int, external_listing_id: string}>
      */
-    public function priceCandidates(?int $productId = null): array
+    public function priceCandidates(?int $productId = null, ?string $marketplace = null): array
     {
-        return $this->rows($this->baseQuery($productId)->where('p.price_status', SupplierSelectionService::PRICE_STATUS_OK));
+        return $this->rows($this->baseQuery(MarketplaceAdapter::CAPABILITY_PRICE, $productId, $marketplace)->where('p.price_status', SupplierSelectionService::PRICE_STATUS_OK));
     }
 
-    private function baseQuery(?int $productId): BaseBuilder
+    /**
+     * Só entram marketplaces cujo adaptador sabe fazer a atualização.
+     */
+    private function baseQuery(string $capability, ?int $productId, ?string $marketplace): BaseBuilder
     {
+        $slugs = array_keys($this->marketplaces()->supporting($capability));
+        if ($marketplace !== null) {
+            $slugs = array_values(array_intersect($slugs, [$marketplace]));
+        }
+
         $builder = Database::connect()->table('marketplace_listings ml')
             ->select('ml.id, ml.external_listing_id')
             ->join('products p', 'p.id = ml.product_id')
             ->join('marketplace_accounts a', 'a.id = ml.marketplace_account_id')
+            ->join('marketplaces m', 'm.id = a.marketplace_id')
+            ->whereIn('m.slug', $slugs === [] ? [''] : $slugs)
             ->where('a.status', MarketplaceAccountModel::STATUS_CONNECTED)
             ->where('a.active', 1)
             ->where('ml.external_listing_id IS NOT NULL', null, false)
@@ -162,5 +175,10 @@ class ListingAutoSync
     private function queue(): JobQueue
     {
         return $this->queue ?? service('jobQueue');
+    }
+
+    private function marketplaces(): MarketplaceRegistry
+    {
+        return $this->marketplaces ?? service('marketplaces');
     }
 }

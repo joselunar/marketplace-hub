@@ -22,4 +22,18 @@ abstract class AbstractJob implements JobInterface
 
         return (int) $value;
     }
+
+    /**
+     * Identificador curto obrigatório do payload (slug de marketplace, por exemplo).
+     */
+    protected function slug(array $payload, string $key): string
+    {
+        $value = $payload[$key] ?? null;
+
+        if (! is_string($value) || preg_match('/^[a-z0-9_-]{1,50}$/', $value) !== 1) {
+            throw new InvalidArgumentException(sprintf('Payload sem "%s" válido.', $key));
+        }
+
+        return $value;
+    }
 }

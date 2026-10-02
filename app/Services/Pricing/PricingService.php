@@ -9,6 +9,7 @@ use App\DTO\Pricing\PricingConfig;
 use App\DTO\Pricing\PricingContext;
 use App\Exceptions\ValidationException;
 use App\Models\CategoryModel;
+use App\Models\MarketplaceModel;
 use App\Services\Settings\SettingsService;
 use App\Support\Decimal;
 
@@ -22,12 +23,31 @@ class PricingService
         private readonly PriceCalculator $calculator = new PriceCalculator(),
         private readonly CategoryModel $categories = new CategoryModel(),
         private readonly ?SettingsService $settings = null,
+        private readonly MarketplaceModel $marketplaces = new MarketplaceModel(),
     ) {
     }
 
-    public function config(): PricingConfig
+    /**
+     * Parâmetros globais ou, com o slug, já com as tarifas padrão do marketplace.
+     */
+    public function config(?string $marketplace = null): PricingConfig
     {
-        return PricingConfig::fromSettings($this->settings ?? service('settings'));
+        $config = PricingConfig::fromSettings($this->settings ?? service('settings'));
+        if ($marketplace === null) {
+            return $config;
+        }
+
+        $row = $this->marketplaces->findBySlug($marketplace);
+
+        return $row === null ? $config : $config->withMarketplaceDefaults($row);
+    }
+
+    public function configForMarketplaceId(?int $marketplaceId): PricingConfig
+    {
+        $config = PricingConfig::fromSettings($this->settings ?? service('settings'));
+        $row    = $marketplaceId === null ? null : $this->marketplaces->find($marketplaceId);
+
+        return $row === null ? $config : $config->withMarketplaceDefaults($row);
     }
 
     public function calculator(): PriceCalculator
@@ -134,11 +154,17 @@ class PricingService
             $errors['category_id'] = 'Categoria inválida.';
         }
 
+        $marketplace = isset($input['marketplace']) && is_string($input['marketplace']) && $input['marketplace'] !== '' ? $input['marketplace'] : null;
+
+        if ($marketplace !== null && ! service('marketplaces')->has($marketplace)) {
+            $errors['marketplace'] = 'Marketplace inválido.';
+        }
+
         if ($errors !== []) {
             throw new ValidationException($errors);
         }
 
-        $config  = $this->config();
+        $config  = $this->config($marketplace);
         $margins = $this->marginPolicy([
             'category_id'               => $categoryId,
             'desired_margin_percentage' => $values['desired_margin_percentage'],

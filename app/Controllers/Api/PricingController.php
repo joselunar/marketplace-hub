@@ -8,13 +8,13 @@ use CodeIgniter\HTTP\ResponseInterface;
 class PricingController extends BaseApiController
 {
     /**
-     * GET /api/pricing/simulate?cost_price=…&shipping_cost=…&category_id=…&sale_price=…
+     * GET /api/pricing/simulate?cost_price=…&shipping_cost=…&category_id=…&marketplace=…&sale_price=…
      */
     public function simulate(): ResponseInterface
     {
         $input = [];
 
-        foreach (['cost_price', 'shipping_cost', 'extra_cost', 'category_id', 'desired_margin_percentage', 'minimum_margin_percentage', 'sale_price'] as $field) {
+        foreach (['cost_price', 'shipping_cost', 'extra_cost', 'category_id', 'marketplace', 'desired_margin_percentage', 'minimum_margin_percentage', 'sale_price'] as $field) {
             $input[$field] = $this->queryString($field);
         }
 

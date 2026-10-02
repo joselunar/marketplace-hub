@@ -2,12 +2,12 @@
 
 namespace Config;
 
-use App\Jobs\ImportMercadoLivreOrdersJob;
-use App\Jobs\ProcessMercadoLivreNotificationsJob;
+use App\Jobs\ImportMarketplaceOrdersJob;
+use App\Jobs\ProcessMarketplaceNotificationsJob;
 use App\Jobs\RecalculateSupplierSelectionJob;
-use App\Jobs\RefreshMercadoLivreTokenJob;
-use App\Jobs\SyncMercadoLivrePricesJob;
-use App\Jobs\SyncMercadoLivreStockJob;
+use App\Jobs\RefreshMarketplaceTokenJob;
+use App\Jobs\SyncListingPriceJob;
+use App\Jobs\SyncListingStockJob;
 use App\Jobs\SyncSupplierPricesJob;
 use App\Jobs\SyncSupplierStockJob;
 use CodeIgniter\Config\BaseConfig;
@@ -27,32 +27,33 @@ class Automation extends BaseConfig
      * @var array<string, class-string<\App\Jobs\JobInterface>>
      */
     public array $jobs = [
-        SyncSupplierStockJob::TYPE                => SyncSupplierStockJob::class,
-        SyncSupplierPricesJob::TYPE               => SyncSupplierPricesJob::class,
-        RecalculateSupplierSelectionJob::TYPE     => RecalculateSupplierSelectionJob::class,
-        SyncMercadoLivreStockJob::TYPE            => SyncMercadoLivreStockJob::class,
-        SyncMercadoLivrePricesJob::TYPE           => SyncMercadoLivrePricesJob::class,
-        RefreshMercadoLivreTokenJob::TYPE         => RefreshMercadoLivreTokenJob::class,
-        ProcessMercadoLivreNotificationsJob::TYPE => ProcessMercadoLivreNotificationsJob::class,
-        ImportMercadoLivreOrdersJob::TYPE         => ImportMercadoLivreOrdersJob::class,
+        SyncSupplierStockJob::TYPE               => SyncSupplierStockJob::class,
+        SyncSupplierPricesJob::TYPE              => SyncSupplierPricesJob::class,
+        RecalculateSupplierSelectionJob::TYPE    => RecalculateSupplierSelectionJob::class,
+        SyncListingStockJob::TYPE                => SyncListingStockJob::class,
+        SyncListingPriceJob::TYPE                => SyncListingPriceJob::class,
+        RefreshMarketplaceTokenJob::TYPE         => RefreshMarketplaceTokenJob::class,
+        ProcessMarketplaceNotificationsJob::TYPE => ProcessMarketplaceNotificationsJob::class,
+        ImportMarketplaceOrdersJob::TYPE         => ImportMarketplaceOrdersJob::class,
     ];
 
     /**
      * Tarefas do agendador. "interval" em minutos ou "setting" com a chave
      * de configuração do intervalo (0 desliga); "requires" é uma configuração
-     * booleana que precisa estar ligada.
+     * booleana que precisa estar ligada. As tarefas de marketplace passam por
+     * todos os adaptadores com a capacidade correspondente.
      *
      * @var array<string, array{label: string, interval?: int, setting?: string, requires?: string}>
      */
     public array $tasks = [
-        'meli_notifications' => ['label' => 'Processar notificações do Mercado Livre', 'interval' => 1],
-        'meli_tokens'        => ['label' => 'Renovar tokens do Mercado Livre', 'interval' => 15],
-        'supplier_selection' => ['label' => 'Recalcular fornecedores e preços', 'interval' => 60],
-        'supplier_stock'     => ['label' => 'Sincronizar estoque dos fornecedores', 'setting' => 'sync.supplier_stock_interval'],
-        'supplier_prices'    => ['label' => 'Sincronizar custos dos fornecedores', 'setting' => 'sync.supplier_price_interval'],
-        'meli_stock'         => ['label' => 'Conferir estoque dos anúncios', 'setting' => 'sync.marketplace_stock_interval', 'requires' => 'sync.auto_update_stock'],
-        'meli_prices'        => ['label' => 'Conferir preço dos anúncios', 'setting' => 'sync.marketplace_price_interval', 'requires' => 'sync.auto_update_price'],
-        'meli_orders'        => ['label' => 'Importar pedidos recentes', 'setting' => 'sync.orders_import_interval'],
+        'marketplace_notifications' => ['label' => 'Processar notificações dos marketplaces', 'interval' => 1],
+        'marketplace_tokens'        => ['label' => 'Renovar tokens dos marketplaces', 'interval' => 15],
+        'supplier_selection'        => ['label' => 'Recalcular fornecedores e preços', 'interval' => 60],
+        'supplier_stock'            => ['label' => 'Sincronizar estoque dos fornecedores', 'setting' => 'sync.supplier_stock_interval'],
+        'supplier_prices'           => ['label' => 'Sincronizar custos dos fornecedores', 'setting' => 'sync.supplier_price_interval'],
+        'listing_stock'             => ['label' => 'Conferir estoque dos anúncios', 'setting' => 'sync.marketplace_stock_interval', 'requires' => 'sync.auto_update_stock'],
+        'listing_prices'            => ['label' => 'Conferir preço dos anúncios', 'setting' => 'sync.marketplace_price_interval', 'requires' => 'sync.auto_update_price'],
+        'marketplace_orders'        => ['label' => 'Importar pedidos recentes', 'setting' => 'sync.orders_import_interval'],
     ];
 
     /**

@@ -24,9 +24,9 @@ final class AccessControlTest extends FeatureTestCase
             'suppliers', 'suppliers/new', "suppliers/{$supplier}", "suppliers/{$supplier}/edit",
             'offers', 'offers/new', "offers/{$offer}/edit", 'offers?link=unlinked',
             'imports', 'imports/new', 'users', 'users/new', 'settings', 'logs', 'logs?tab=sync',
-            'marketplaces/mercadolivre', 'marketplaces/mercadolivre/categories', 'marketplaces/mercadolivre/listings',
+            'marketplaces', 'pricing?marketplace=mercadolivre', 'marketplaces/mercadolivre', 'marketplaces/mercadolivre/categories', 'marketplaces/mercadolivre/listings',
             'marketplaces/mercadolivre/notifications', 'orders', 'orders?fulfillment=awaiting_supplier&period=7d',
-            'sync', 'sync?status=failed&type=meli_stock&q=MLB',
+            'sync', 'sync?status=failed&type=listing_stock&q=MLB',
         ];
 
         foreach ($pages as $page) {

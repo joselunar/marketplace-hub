@@ -3,8 +3,8 @@
 namespace Tests\Database\Automation;
 
 use App\DTO\MercadoLivre\TokenSet;
-use App\Jobs\SyncMercadoLivrePricesJob;
-use App\Jobs\SyncMercadoLivreStockJob;
+use App\Jobs\SyncListingPriceJob;
+use App\Jobs\SyncListingStockJob;
 use App\Models\JobModel;
 use App\Services\Automation\JobQueue;
 use App\Services\Marketplaces\MarketplaceAccountService;
@@ -78,18 +78,18 @@ final class ListingAutoSyncTest extends DatabaseTestCase
         $this->changeStock(5);
 
         $job = $this->db->table('jobs')->get()->getRowArray();
-        $this->assertSame(SyncMercadoLivreStockJob::TYPE, $job['type']);
+        $this->assertSame(SyncListingStockJob::TYPE, $job['type']);
         $this->assertSame(JobModel::SOURCE_EVENT, $job['source']);
         $this->assertSame('MLB1', $job['reference']);
-        $this->assertSame(0, $this->db->table('jobs')->where('type', SyncMercadoLivrePricesJob::TYPE)->countAllResults());
+        $this->assertSame(0, $this->db->table('jobs')->where('type', SyncListingPriceJob::TYPE)->countAllResults());
 
         $this->enable('sync.auto_update_price');
         $this->db->table('supplier_offers')->where('id', $this->offerId)->update(['cost_price' => '120.00']);
         service('supplierSelection')->select($this->productId, SupplierSelectionService::TRIGGER_OFFER);
-        $this->assertSame(1, $this->db->table('jobs')->where('type', SyncMercadoLivrePricesJob::TYPE)->countAllResults(), 'custo mudou o preço sugerido');
+        $this->assertSame(1, $this->db->table('jobs')->where('type', SyncListingPriceJob::TYPE)->countAllResults(), 'custo mudou o preço sugerido');
 
         service('supplierSelection')->select($this->productId, SupplierSelectionService::TRIGGER_OFFER);
-        $this->assertSame(1, $this->db->table('jobs')->where('type', SyncMercadoLivrePricesJob::TYPE)->countAllResults(), 'recálculo sem mudança de preço não enfileira');
+        $this->assertSame(1, $this->db->table('jobs')->where('type', SyncListingPriceJob::TYPE)->countAllResults(), 'recálculo sem mudança de preço não enfileira');
     }
 
     public function testStockJobSendsQuantityAndSkipsWhenAlreadyCorrect(): void
@@ -98,17 +98,17 @@ final class ListingAutoSyncTest extends DatabaseTestCase
         $this->transport->on('PUT', '/items/MLB1', 200, ['id' => 'MLB1', 'available_quantity' => 8, 'status' => 'active']);
         $queue = new JobQueue();
 
-        $queue->enqueue(SyncMercadoLivreStockJob::TYPE, ['listing_id' => $listingId]);
+        $queue->enqueue(SyncListingStockJob::TYPE, ['listing_id' => $listingId]);
         $queue->work(10, 10);
 
         $this->assertSame(['available_quantity' => 8], FakeMercadoLivreTransport::json($this->transport->requestsTo('PUT', '/items/MLB1')[0]));
         $this->seeInDatabase('marketplace_listings', ['id' => $listingId, 'available_quantity' => 8]);
-        $this->seeInDatabase('jobs', ['status' => JobModel::STATUS_COMPLETED, 'result' => 'Estoque enviado: 5 → 8.']);
+        $this->seeInDatabase('jobs', ['status' => JobModel::STATUS_COMPLETED, 'result' => 'Mercado Livre: estoque enviado, 5 → 8.']);
 
-        $queue->enqueue(SyncMercadoLivreStockJob::TYPE, ['listing_id' => $listingId]);
+        $queue->enqueue(SyncListingStockJob::TYPE, ['listing_id' => $listingId]);
         $queue->work(10, 10);
         $this->assertCount(1, $this->transport->requestsTo('PUT', '/items/MLB1'), 'quantidade igual não chama a API');
-        $this->seeInDatabase('jobs', ['status' => JobModel::STATUS_COMPLETED, 'result' => 'Estoque já estava correto (8).']);
+        $this->seeInDatabase('jobs', ['status' => JobModel::STATUS_COMPLETED, 'result' => 'Mercado Livre: estoque já estava correto (8).']);
     }
 
     public function testMarketplaceOutageIsRetried(): void
@@ -117,7 +117,7 @@ final class ListingAutoSyncTest extends DatabaseTestCase
         $this->transport->on('PUT', '/items/MLB1', 503, ['message' => 'Service unavailable', 'error' => 'service_unavailable', 'status' => 503]);
         $queue = new JobQueue();
 
-        $queue->enqueue(SyncMercadoLivreStockJob::TYPE, ['listing_id' => $listingId]);
+        $queue->enqueue(SyncListingStockJob::TYPE, ['listing_id' => $listingId]);
         $stats = $queue->work(10, 10);
 
         $this->assertSame(1, $stats['retried']);
@@ -138,13 +138,13 @@ final class ListingAutoSyncTest extends DatabaseTestCase
         $this->transport->on('PUT', '/items/MLB1', 200, ['id' => 'MLB1', 'price' => 175.9, 'status' => 'active']);
         $queue = new JobQueue();
 
-        $queue->enqueue(SyncMercadoLivrePricesJob::TYPE, ['listing_id' => $listingId]);
+        $queue->enqueue(SyncListingPriceJob::TYPE, ['listing_id' => $listingId]);
         $queue->work(10, 10);
 
         $this->assertSame(['price' => 175.9], FakeMercadoLivreTransport::json($this->transport->requestsTo('PUT', '/items/MLB1')[0]));
-        $this->seeInDatabase('jobs', ['status' => JobModel::STATUS_COMPLETED, 'result' => 'Preço enviado: R$ 150,00 → R$ 175,90.']);
+        $this->seeInDatabase('jobs', ['status' => JobModel::STATUS_COMPLETED, 'result' => 'Mercado Livre: preço enviado, R$ 150,00 → R$ 175,90.']);
 
-        $queue->enqueue(SyncMercadoLivrePricesJob::TYPE, ['listing_id' => $listingId]);
+        $queue->enqueue(SyncListingPriceJob::TYPE, ['listing_id' => $listingId]);
         $queue->work(10, 10);
         $this->assertCount(1, $this->transport->requestsTo('PUT', '/items/MLB1'));
         $this->assertSame(1, $this->db->table('marketplace_listing_events')->countAllResults(), 'conferência sem mudança não gera evento');

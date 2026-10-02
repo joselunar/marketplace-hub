@@ -84,7 +84,13 @@
 - Tela de sincronizações (tarefas, executar agora, fila, repetir, cancelar) e comandos `suppliers:sync`, `meli:sync-stock`, `meli:sync-prices` e `marketplace:sync`
 - Dashboard completo: anúncios ativos, vendas dos últimos 14 dias, pedidos recentes, produtos com maior lucro e alertas de agendador parado, jobs com falha, anúncios com erro e tokens prestes a vencer
 
-## Fase 9 — Outros marketplaces
+## Fase 9 — Outros marketplaces ✅
 
-- Interface comum de marketplace
-- Novos adaptadores (ex.: Shopee, Amazon, Magalu) seguindo as APIs oficiais
+- Interface comum (`MarketplaceAdapter`) com capacidades declaradas: renovação de token, anúncios, estoque, preço, pedidos e notificações; o que o adaptador não oferece é recusado com mensagem clara e falha definitiva na fila
+- Registro de adaptadores em `Config\Marketplaces`, com o Mercado Livre como primeiro adaptador
+- Jobs e tarefas genéricos (`RefreshMarketplaceTokenJob`, `ImportMarketplaceOrdersJob`, `ProcessMarketplaceNotificationsJob`, `SyncListingStockJob`, `SyncListingPriceJob`) que resolvem o adaptador pela conta ou pelo anúncio; nenhuma conta, anúncio ou notificação vai para o código de outro marketplace
+- Erros de API e transporte HTTP independentes do Mercado Livre (`MarketplaceApiError`, `App\Services\Http`)
+- Tarifas padrão por marketplace (comissão, tarifa fixa e faixa), herdando as globais, usadas no simulador, na prévia e no lucro estimado dos pedidos
+- Tela **Marketplaces** (situação da integração, variáveis que faltam, contas, anúncios ativos, capacidades e tarifas) e endpoint `GET /api/marketplaces`
+- Pedidos com importação e atualização pelo adaptador da conta, telas e mensagens sem referência fixa ao Mercado Livre
+- Guia "Adicionando um marketplace" no README; Shopee, Amazon e Magalu entram por adaptadores escritos a partir da documentação oficial de cada um, quando houver credenciais de parceiro

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\Marketplaces\MercadoLivre\Http;
+namespace App\Services\Http;
 
 use RuntimeException;
 

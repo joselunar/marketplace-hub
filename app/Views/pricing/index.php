@@ -34,6 +34,17 @@
                             <div class="form-text">As margens vazias abaixo herdam desta categoria (ou da configuração global).</div>
                         </div>
 
+                        <div class="col-12">
+                            <label for="marketplace" class="form-label">Tarifas do marketplace</label>
+                            <select class="form-select<?= isset($errors['marketplace']) ? ' is-invalid' : '' ?>" id="marketplace" name="marketplace">
+                                <option value="">— Usar tarifas globais —</option>
+                                <?php foreach ($marketplaces as $slug => $name): ?>
+                                    <option value="<?= esc($slug, 'attr') ?>" <?= $input['marketplace'] === $slug ? 'selected' : '' ?>><?= esc($name) ?></option>
+                                <?php endforeach ?>
+                            </select>
+                            <div class="form-text">Comissão e tarifa fixa configuradas para o marketplace; campos vazios lá herdam das globais.</div>
+                        </div>
+
                         <div class="col-sm-6">
                             <label for="desired_margin_percentage" class="form-label">Margem desejada (%)</label>
                             <input type="text" inputmode="decimal" class="form-control<?= isset($errors['desired_margin_percentage']) ? ' is-invalid' : '' ?>" id="desired_margin_percentage" name="desired_margin_percentage" value="<?= esc($input['desired_margin_percentage'], 'attr') ?>" placeholder="herdada">

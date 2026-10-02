@@ -2,8 +2,8 @@
 
 namespace App\Services\Marketplaces\MercadoLivre;
 
-use App\Services\Marketplaces\MercadoLivre\Http\HttpTransport;
-use App\Services\Marketplaces\MercadoLivre\Http\TransportException;
+use App\Services\Http\HttpTransport;
+use App\Services\Http\TransportException;
 use Config\MercadoLivre;
 
 /**

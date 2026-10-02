@@ -326,7 +326,7 @@ class MercadoLivreListingPreviewService
     public function officialPrice(array $product, array $account, OfferEvaluation $offer, string $categoryId, string $listingTypeId, string $currencyId): array
     {
         $pricing = $this->pricing ?? service('pricing');
-        $context = $pricing->contextFor($product);
+        $context = $pricing->contextFor($product, $pricing->config(MercadoLivreAuthService::SLUG));
         $costs   = new CostInput($offer->costPrice, $offer->shippingCost, $context->productExtraCost);
         $start   = $offer->pricing?->suggestedPrice ?? $offer->pricing?->price ?? $product['suggested_price'] ?? null;
 

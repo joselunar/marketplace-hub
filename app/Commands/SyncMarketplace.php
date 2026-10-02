@@ -9,8 +9,8 @@ use CodeIgniter\CLI\BaseCommand;
 use CodeIgniter\CLI\CLI;
 
 /**
- * Sincronização completa com o Mercado Livre sob demanda: enfileira as
- * tarefas do marketplace, ignorando os intervalos, e processa a fila.
+ * Sincronização completa com os marketplaces sob demanda: enfileira as
+ * tarefas de todos os adaptadores, ignorando os intervalos, e processa a fila.
  */
 class SyncMarketplace extends BaseCommand
 {
@@ -25,7 +25,7 @@ class SyncMarketplace extends BaseCommand
     /**
      * Estoque e preço só entram com a atualização automática correspondente ligada.
      */
-    private const TASKS = ['meli_tokens', 'meli_notifications', 'meli_orders', 'meli_stock', 'meli_prices'];
+    private const TASKS = ['marketplace_tokens', 'marketplace_notifications', 'marketplace_orders', 'listing_stock', 'listing_prices'];
 
     public function run(array $params)
     {

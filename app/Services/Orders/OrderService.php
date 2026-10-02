@@ -111,7 +111,7 @@ class OrderService
     {
         $order = $this->lockOrder($orderId);
         if (! in_array($order['status'], Orders::PAID_STATUSES, true)) {
-            throw new BusinessRuleException('O pedido ainda não está pago no Mercado Livre.');
+            throw new BusinessRuleException('O pedido ainda não está pago no marketplace.');
         }
         if ((int) $order['fraud_risk'] === 1) {
             throw new BusinessRuleException('Pedido com risco de fraude: não acione fornecedores.');
@@ -172,10 +172,10 @@ class OrderService
             throw new BusinessRuleException('Este pedido ao fornecedor já foi enviado ou cancelado.');
         }
         if (! in_array($order['status'], Orders::PAID_STATUSES, true)) {
-            throw new BusinessRuleException('O pedido não está pago no Mercado Livre; nada foi enviado ao fornecedor.');
+            throw new BusinessRuleException('O pedido não está pago no marketplace; nada foi enviado ao fornecedor.');
         }
         if ((int) $order['fraud_risk'] === 1) {
-            throw new BusinessRuleException('O Mercado Livre sinalizou risco de fraude neste pedido: não envie a mercadoria.');
+            throw new BusinessRuleException('O marketplace sinalizou risco de fraude neste pedido: não envie a mercadoria.');
         }
 
         $supplier = $this->db->table('suppliers')->where('id', (int) $supplierOrder['supplier_id'])->get()->getRowArray();
@@ -512,7 +512,7 @@ class OrderService
         $this->supplierOrders->builder()
             ->where('order_id', $orderId)
             ->where('status', SupplierOrders::STATUS_PENDING)
-            ->update(['status' => SupplierOrders::STATUS_CANCELLED, 'notes' => 'Cancelado automaticamente: venda cancelada no Mercado Livre.', 'updated_at' => date('Y-m-d H:i:s')]);
+            ->update(['status' => SupplierOrders::STATUS_CANCELLED, 'notes' => 'Cancelado automaticamente: venda cancelada no marketplace.', 'updated_at' => date('Y-m-d H:i:s')]);
     }
 
     /**
@@ -522,7 +522,7 @@ class OrderService
     {
         $order   = $this->orders->find($orderId);
         $items   = $this->items->where('order_id', $orderId)->findAll();
-        $config  = ($this->pricing ?? service('pricing'))->config();
+        $config  = ($this->pricing ?? service('pricing'))->configForMarketplaceId($order['marketplace_id'] !== null ? (int) $order['marketplace_id'] : null);
         $extras  = $this->productExtraCosts($items);
         $fees    = '0.00';
         $cost    = null;
@@ -590,7 +590,7 @@ class OrderService
 
             return $placed === []
                 ? [Orders::FULFILLMENT_CANCELLED, null]
-                : [Orders::FULFILLMENT_ATTENTION, 'Venda cancelada no Mercado Livre com pedido já enviado ao fornecedor: cancele com o fornecedor e atualize aqui.'];
+                : [Orders::FULFILLMENT_ATTENTION, 'Venda cancelada no marketplace com pedido já enviado ao fornecedor: cancele com o fornecedor e atualize aqui.'];
         }
 
         if (! in_array($order['status'], Orders::PAID_STATUSES, true)) {
@@ -598,7 +598,7 @@ class OrderService
         }
 
         if ((int) $order['fraud_risk'] === 1) {
-            return [Orders::FULFILLMENT_ATTENTION, 'O Mercado Livre sinalizou risco de fraude (fraud_risk_detected): não envie a mercadoria e cancele a venda.'];
+            return [Orders::FULFILLMENT_ATTENTION, 'O marketplace sinalizou risco de fraude: não envie a mercadoria e cancele a venda.'];
         }
 
         $issues = [];

@@ -82,6 +82,29 @@ final class PricingConfig
     }
 
     /**
+     * Mesma configuração com as tarifas padrão de um marketplace. Valores
+     * nulos mantêm os globais, então cada campo pode ser sobrescrito sozinho.
+     *
+     * @param array{fee_percentage?: string|null, fixed_fee?: string|null, fixed_fee_threshold?: string|null} $marketplace
+     */
+    public function withMarketplaceDefaults(array $marketplace): self
+    {
+        $pick = static fn (string $key, string $fallback): string => isset($marketplace[$key]) && $marketplace[$key] !== '' ? (string) $marketplace[$key] : $fallback;
+
+        return new self(
+            desiredMargin: $this->desiredMargin,
+            minimumMargin: $this->minimumMargin,
+            taxPercentage: $this->taxPercentage,
+            marketplaceFeePercentage: $pick('fee_percentage', $this->marketplaceFeePercentage),
+            marketplaceFixedFee: $pick('fixed_fee', $this->marketplaceFixedFee),
+            fixedFeeThreshold: $pick('fixed_fee_threshold', $this->fixedFeeThreshold),
+            extraCostPercentage: $this->extraCostPercentage,
+            extraFixedCost: $this->extraFixedCost,
+            rounding: $this->rounding,
+        );
+    }
+
+    /**
      * Soma dos percentuais cobrados sobre o preço, sem a margem.
      */
     public function percentageCosts(): string

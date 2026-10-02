@@ -2,7 +2,8 @@
 
 namespace App\Commands;
 
-use App\Jobs\SyncMercadoLivreStockJob;
+use App\Jobs\SyncListingStockJob;
+use App\Services\Marketplaces\MercadoLivre\MercadoLivreAuthService;
 use CodeIgniter\CLI\BaseCommand;
 
 /**
@@ -28,10 +29,10 @@ class SyncMercadoLivreStock extends BaseCommand
             $params,
             'sync.auto_update_stock',
             'A atualização automática de estoque está desligada (Configurações > Sincronização). Use --force para executar mesmo assim.',
-            SyncMercadoLivreStockJob::TYPE,
-            static fn (): array => service('listingAutoSync')->stockCandidates(),
+            SyncListingStockJob::TYPE,
+            static fn (): array => service('listingAutoSync')->stockCandidates(null, MercadoLivreAuthService::SLUG),
             static function (int $listingId): string {
-                $listing = service('mercadoLivreProducts')->updateStock($listingId, null, true);
+                $listing = service('marketplaces')->get(MercadoLivreAuthService::SLUG)->updateListingStock($listingId, null, true);
 
                 return 'quantidade ' . (int) $listing['available_quantity'] . '.';
             },

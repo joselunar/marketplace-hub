@@ -7,7 +7,7 @@ use App\Jobs\RecalculateSupplierSelectionJob;
 use App\Models\JobModel;
 use App\Models\ScheduledTaskModel;
 use App\Services\Automation\JobQueue;
-use App\Services\Marketplaces\MercadoLivre\Http\TransportException;
+use App\Services\Http\TransportException;
 use App\Services\Marketplaces\MercadoLivre\MercadoLivreApiException;
 use App\Services\Suppliers\Connectors\UnsupportedOperationException;
 use Config\Automation;

@@ -136,6 +136,17 @@
         });
     });
 
+    // Prévia de anúncio: mexeu no formulário, precisa atualizar a prévia antes de confirmar.
+    document.querySelectorAll('[data-listing-preview]').forEach((form) => {
+        const confirm = document.querySelector('[data-listing-confirm]');
+        const hint = document.querySelector('[data-listing-stale]');
+
+        form.addEventListener('input', () => {
+            confirm?.setAttribute('disabled', 'disabled');
+            hint?.classList.remove('d-none');
+        });
+    });
+
     // Autocomplete de produto (usa GET /api/products?q=).
     document.querySelectorAll('[data-product-autocomplete]').forEach((wrapper) => {
         const input = wrapper.querySelector('input[type="search"]');

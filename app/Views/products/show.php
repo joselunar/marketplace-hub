@@ -2,6 +2,7 @@
 
 <?= $this->section('content') ?>
 <div class="d-flex flex-wrap gap-2 justify-content-end mb-3">
+    <a href="<?= site_url('marketplaces/mercadolivre/listings/new?product_id=' . $product['id']) ?>" class="btn btn-outline-primary btn-sm"><i class="bi bi-megaphone me-1"></i> Publicar no Mercado Livre</a>
     <a href="<?= site_url('offers/new?product_id=' . $product['id'] . '&return_to=product') ?>" class="btn btn-outline-secondary btn-sm"><i class="bi bi-plus-lg me-1"></i> Adicionar oferta</a>
     <a href="<?= site_url('products/' . $product['id'] . '/edit') ?>" class="btn btn-primary btn-sm"><i class="bi bi-pencil me-1"></i> Editar</a>
     <?php if (is_admin()): ?>
@@ -55,6 +56,30 @@
 <?= $this->include('products/_selection') ?>
 
 <?= $this->include('products/_pricing') ?>
+
+<?php if (! empty($listings)): ?>
+    <div class="card mb-3">
+        <div class="card-header bg-white fw-semibold">Anúncios no Mercado Livre</div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead><tr><th>Conta</th><th>ID</th><th class="text-end">Preço</th><th class="text-center">Estoque</th><th>Status</th><th>Última sincronização</th><th></th></tr></thead>
+                <tbody>
+                    <?php foreach ($listings as $listing): ?>
+                        <tr>
+                            <td class="small"><?= esc($listing['account_name']) ?></td>
+                            <td class="small"><?= esc($listing['external_listing_id'] ?? '—') ?></td>
+                            <td class="text-end"><?= money($listing['price']) ?></td>
+                            <td class="text-center"><?= (int) $listing['available_quantity'] ?></td>
+                            <td><?= listing_status_badge($listing['status']) ?></td>
+                            <td class="small"><?= relative_time($listing['last_sync_at']) ?></td>
+                            <td class="text-end"><a href="<?= site_url('marketplaces/mercadolivre/listings/' . $listing['id']) ?>" class="btn btn-sm btn-outline-secondary" title="Visualizar"><i class="bi bi-eye"></i></a></td>
+                        </tr>
+                    <?php endforeach ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+<?php endif ?>
 
 <div class="card mb-3">
     <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">

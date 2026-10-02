@@ -5,6 +5,7 @@ namespace Config;
 use App\Filters\AuthFilter;
 use App\Filters\GuestFilter;
 use App\Filters\LoginThrottleFilter;
+use App\Filters\MarketplaceThrottleFilter;
 use App\Filters\RoleFilter;
 use CodeIgniter\Config\Filters as BaseFilters;
 use CodeIgniter\Filters\Cors;
@@ -42,6 +43,7 @@ class Filters extends BaseFilters
         'guest'         => GuestFilter::class,
         'role'          => RoleFilter::class,
         'loginthrottle' => LoginThrottleFilter::class,
+        'marketplacethrottle' => MarketplaceThrottleFilter::class,
     ];
 
     /**

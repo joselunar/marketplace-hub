@@ -53,6 +53,27 @@ class MercadoLivreApiClient
     }
 
     /**
+     * @param array<string, mixed> $body enviado como JSON
+     */
+    public function post(string $path, string $accessToken, array $body): array
+    {
+        return $this->send('POST', $path, $this->authHeaders($accessToken) + ['Content-Type' => 'application/json'], $this->encode($body));
+    }
+
+    /**
+     * @param array<string, mixed> $body enviado como JSON
+     */
+    public function put(string $path, string $accessToken, array $body): array
+    {
+        return $this->send('PUT', $path, $this->authHeaders($accessToken) + ['Content-Type' => 'application/json'], $this->encode($body));
+    }
+
+    private function encode(array $body): string
+    {
+        return json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
+    }
+
+    /**
      * @param array<string, string> $headers
      */
     private function send(string $method, string $path, array $headers, ?string $body = null): array

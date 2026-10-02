@@ -4,6 +4,7 @@ use App\Enums\SupplierIntegrationType;
 use App\Enums\SupplierStatus;
 use App\Enums\UserRole;
 use App\Models\MarketplaceAccountModel;
+use App\Models\MarketplaceListingModel;
 use App\Services\Suppliers\SupplierSelectionService;
 use CodeIgniter\I18n\Time;
 
@@ -203,6 +204,26 @@ if (! function_exists('marketplace_account_badge')) {
             ! empty($account['token_expired'])                                  => badge('Token vencido', 'warning'),
             default                                                             => badge($label, 'success'),
         };
+    }
+}
+
+if (! function_exists('listing_status_badge')) {
+    function listing_status_badge(string $status, ?string $subStatus = null): string
+    {
+        $label   = MarketplaceListingModel::STATUS_LABELS[$status] ?? $status;
+        $variant = match ($status) {
+            MarketplaceListingModel::STATUS_ACTIVE                                       => 'success',
+            MarketplaceListingModel::STATUS_PAUSED, MarketplaceListingModel::STATUS_PENDING => 'warning',
+            MarketplaceListingModel::STATUS_ERROR, MarketplaceListingModel::STATUS_PAYMENT   => 'danger',
+            MarketplaceListingModel::STATUS_UNDER_REVIEW                                 => 'info',
+            default                                                                     => 'secondary',
+        };
+
+        $badge = badge($label, $variant);
+
+        return $subStatus !== null && $subStatus !== ''
+            ? $badge . '<div class="small text-body-secondary">' . esc(str_replace(['_', ','], [' ', ', '], $subStatus)) . '</div>'
+            : $badge;
     }
 }
 

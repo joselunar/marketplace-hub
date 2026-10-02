@@ -51,6 +51,24 @@ class MercadoLivre extends BaseConfig
      */
     public int $categoryCacheSeconds = 21600;
 
+    /**
+     * Tarifas mudam com promoções e faixas de preço: cache curto.
+     */
+    public int $feeCacheSeconds = 600;
+
+    /**
+     * Perfil do vendedor (tags como user_product_seller).
+     */
+    public int $sellerCacheSeconds = 3600;
+
+    /**
+     * Tipo de logística e modo de envio do vendedor, enviados na consulta de
+     * tarifas (listing_prices). Sem eles o Mercado Livre devolve uma tarifa
+     * fixa que pode não coincidir com a cobrada. Ex.: drop_off / me2.
+     */
+    public string $logisticType = '';
+    public string $shippingMode = '';
+
     public function __construct()
     {
         parent::__construct();
@@ -58,6 +76,8 @@ class MercadoLivre extends BaseConfig
         $this->clientId     = trim((string) env('MELI_CLIENT_ID', $this->clientId));
         $this->clientSecret = trim((string) env('MELI_CLIENT_SECRET', $this->clientSecret));
         $this->redirectUri  = trim((string) env('MELI_REDIRECT_URI', $this->redirectUri));
+        $this->logisticType = trim((string) env('MELI_LOGISTIC_TYPE', $this->logisticType));
+        $this->shippingMode = trim((string) env('MELI_SHIPPING_MODE', $this->shippingMode));
 
         $pkce = env('MELI_USE_PKCE');
         if ($pkce !== null && $pkce !== '') {

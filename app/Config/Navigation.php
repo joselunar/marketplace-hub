@@ -8,13 +8,14 @@ use CodeIgniter\Config\BaseConfig;
  * Estrutura do menu lateral.
  *
  * - "prefix" define quando o item fica ativo (início da URL).
+ * - "exclude" tira o destaque quando a URL é de um item mais específico.
  * - "roles" restringe a visibilidade; vazio = todos os usuários autenticados.
  * - "soon" marca módulos de fases futuras (exibidos desabilitados).
  */
 class Navigation extends BaseConfig
 {
     /**
-     * @var list<array{label: string, items: list<array{label: string, icon: string, url?: string, prefix?: string, roles?: list<string>, soon?: string}>}>
+     * @var list<array{label: string, items: list<array{label: string, icon: string, url?: string, prefix?: string, exclude?: string, roles?: list<string>, soon?: string}>}>
      */
     public array $sections = [
         [
@@ -42,8 +43,8 @@ class Navigation extends BaseConfig
         [
             'label' => 'Marketplaces',
             'items' => [
-                ['label' => 'Mercado Livre', 'icon' => 'shop', 'url' => 'marketplaces/mercadolivre', 'prefix' => 'marketplaces/mercadolivre'],
-                ['label' => 'Anúncios', 'icon' => 'megaphone', 'soon' => 'Fase 6'],
+                ['label' => 'Mercado Livre', 'icon' => 'shop', 'url' => 'marketplaces/mercadolivre', 'prefix' => 'marketplaces/mercadolivre', 'exclude' => 'marketplaces/mercadolivre/listings'],
+                ['label' => 'Anúncios', 'icon' => 'megaphone', 'url' => 'marketplaces/mercadolivre/listings', 'prefix' => 'marketplaces/mercadolivre/listings'],
             ],
         ],
         [

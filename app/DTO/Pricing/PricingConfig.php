@@ -62,6 +62,26 @@ final class PricingConfig
     }
 
     /**
+     * Mesma configuração com a comissão e a tarifa fixa informadas pelo
+     * marketplace para um preço específico. A tarifa fixa já vem calculada
+     * para aquele preço, então deixa de depender da faixa configurada.
+     */
+    public function withMarketplaceFees(string $percentage, string $fixedFee): self
+    {
+        return new self(
+            desiredMargin: $this->desiredMargin,
+            minimumMargin: $this->minimumMargin,
+            taxPercentage: $this->taxPercentage,
+            marketplaceFeePercentage: $percentage,
+            marketplaceFixedFee: $fixedFee,
+            fixedFeeThreshold: '0.00',
+            extraCostPercentage: $this->extraCostPercentage,
+            extraFixedCost: $this->extraFixedCost,
+            rounding: $this->rounding,
+        );
+    }
+
+    /**
      * Soma dos percentuais cobrados sobre o preço, sem a margem.
      */
     public function percentageCosts(): string

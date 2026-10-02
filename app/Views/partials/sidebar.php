@@ -35,7 +35,7 @@ $user       = auth_user();
                                     <span class="badge text-bg-dark ms-auto fw-normal"><?= esc($item['soon']) ?></span>
                                 </span>
                             <?php else: ?>
-                                <a href="<?= site_url($item['url']) ?>" class="nav-link app-nav-link <?= nav_active($item['prefix']) ?>">
+                                <a href="<?= site_url($item['url']) ?>" class="nav-link app-nav-link <?= isset($item['exclude']) && nav_active($item['exclude']) !== '' ? '' : nav_active($item['prefix']) ?>">
                                     <i class="bi bi-<?= esc($item['icon'], 'attr') ?>"></i>
                                     <span><?= esc($item['label']) ?></span>
                                 </a>

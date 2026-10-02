@@ -15,7 +15,7 @@ O catálogo é **interno e único**: um produto (SKU interno) pode receber ofert
 - Publicar e sincronizar anúncios no Mercado Livre e, depois, em outros marketplaces.
 - Manter auditoria completa das alterações e das sincronizações.
 
-Status atual: **Fases 1 a 5 concluídas** (base, autenticação, fornecedores, catálogo, ofertas, importação CSV, motor de seleção de fornecedores, precificação e conexão OAuth com o Mercado Livre). Veja o [ROADMAP](ROADMAP.md).
+Status atual: **Fases 1 a 6 concluídas** (base, autenticação, fornecedores, catálogo, ofertas, importação CSV, motor de seleção de fornecedores, precificação, conexão OAuth com o Mercado Livre e publicação de anúncios). Veja o [ROADMAP](ROADMAP.md).
 
 ## Arquitetura
 
@@ -61,7 +61,7 @@ Decisões principais:
 - **Auditoria** de toda criação, alteração e exclusão, com remoção automática de campos sensíveis (senhas, tokens, segredos).
 - **Motor de seleção separado em duas partes**: `SupplierRanker` faz só o cálculo (sem banco, testável isoladamente) e `SupplierSelectionService` carrega os dados, grava o resultado e registra as trocas.
 - **Precificação no mesmo padrão**: `PriceCalculator` é puro e `PricingService` resolve margens e parâmetros. O motor de seleção usa o calculador para aplicar a margem mínima a cada oferta e grava o preço do fornecedor escolhido, então seleção e preço nunca ficam dessincronizados.
-- **Tarifas de marketplace são configuração**, não código. Hoje são preenchidas em **Configurações** a partir da tabela oficial; a consulta automática à API de tarifas do Mercado Livre entra com as publicações (Fase 6).
+- **Tarifas de marketplace nunca ficam no código.** Os valores de **Configurações** servem para o preço sugerido e o simulador; na publicação e na atualização de preço de um anúncio, a tarifa é consultada na API oficial do Mercado Livre (`listing_prices`) e o preço é recalculado com ela.
 - **Marketplaces genéricos**: `marketplaces` e `marketplace_accounts` não sabem nada do Mercado Livre; a integração fica em `Services/Marketplaces/MercadoLivre`, dividida em cliente HTTP, OAuth, provedor de token e categorias. O transporte HTTP é uma interface, então os testes nunca chamam a API real.
 
 ## Stack
@@ -140,6 +140,9 @@ GRANT ALL PRIVILEGES ON marketplace_hub_test.* TO 'marketplace'@'localhost';
 | `supplier_selection_logs` | Histórico de trocas do fornecedor principal de cada produto |
 | `marketplaces` | Marketplaces conhecidos (criados a partir de `Config\Marketplaces`) |
 | `marketplace_accounts` | Contas conectadas: usuário externo, site, tokens cifrados, vencimento, status e último erro |
+| `marketplace_listings` | Anúncios: vínculo produto ↔ anúncio, IDs externos (item e User Product), modelo, preço, estoque, situação, tarifas e último erro |
+| `marketplace_listing_events` | Histórico de cada anúncio (publicação, sincronização, preço, estoque, pausa, reativação) |
+| `marketplace_category_mappings` | Categoria interna → categoria do marketplace usada na última publicação |
 
 ## Migrations
 
@@ -174,7 +177,7 @@ php spark serve --port 8080
 
 Acesse <http://localhost:8080> e entre com o e-mail e a senha definidos em `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`.
 
-Telas disponíveis: dashboard, fornecedores, categorias, produtos, ofertas, simulador de preços, importação CSV, Mercado Livre (contas conectadas e categorias), usuários, configurações e logs (auditoria e sincronização). Os módulos das próximas fases aparecem desabilitados no menu.
+Telas disponíveis: dashboard, fornecedores, categorias, produtos, ofertas, simulador de preços, importação CSV, Mercado Livre (contas conectadas, categorias e anúncios), usuários, configurações e logs (auditoria e sincronização). Os módulos das próximas fases aparecem desabilitados no menu.
 
 Em produção, aponte o servidor web para a pasta `public/`, use `CI_ENVIRONMENT=production` e `app.forceGlobalSecureRequests=true` (HTTPS).
 
@@ -270,6 +273,22 @@ A integração segue a documentação oficial ([Autenticação e Autorização](
 - **Categorias e atributos** (aba da mesma tela): árvore de categorias do site da conta, detalhes de publicação de cada categoria, atributos com os obrigatórios destacados e preditor de categoria pelo título do produto. As respostas ficam em cache por 6 horas.
 - Toda conexão, renovação e desconexão é registrada em `sync_logs` (aba **Sincronizações** dos logs).
 
+### Anúncios
+
+A publicação segue [Publicar produtos](https://developers.mercadolivre.com.br/pt_br/publicar-produtos), [User Products](https://developers.mercadolivre.com.br/pt_br/user-products), [Custos por vender](https://developers.mercadolivre.com.br/pt_br/comissao-por-vender) e [Sincronização de publicações](https://developers.mercadolivre.com.br/pt_br/produto-sincronizacao-de-publicacoes). Nada é enviado sem confirmação:
+
+1. Na tela do produto, **Publicar no Mercado Livre** abre a **prévia**. Ela valida o produto (ativo, com fornecedor principal e estoque seguro), a conta, a categoria (folha, aceita publicação e a moeda), os atributos obrigatórios, o título (limite da categoria e sem a palavra "estoque"), as imagens e a garantia.
+2. A categoria vem do formulário, do anúncio anterior, do mapeamento da categoria interna ou do preditor, nessa ordem. Os tipos de anúncio são os disponíveis para a conta naquela categoria.
+3. O preço é recalculado com a tarifa oficial de `listing_prices` para a categoria, o tipo de anúncio e o preço (até convergir) e precisa atingir a margem mínima. Com preço fixo no produto, ele é mantido e só a margem é conferida.
+4. A prévia mostra exatamente o JSON que será enviado a `POST /items`. A confirmação leva o preço e o estoque vistos; se algo mudou até o envio, a publicação é bloqueada e a prévia precisa ser revista.
+5. Após a criação, a descrição vai em `POST /items/{id}/description` e os IDs, a situação, o link e as tarifas ficam em `marketplace_listings`.
+
+- **User Products**: se a conta tem a tag `user_product_seller`, o anúncio é enviado com `family_name` (sem `title`) e o `user_product_id` devolvido é guardado. Vendedores com estoque em vários depósitos não são atendidos por esta versão.
+- **Ações** (lista e detalhe): visualizar, sincronizar (`GET /items/{id}`), atualizar preço (recalculado com a tarifa oficial e recusado abaixo da mínima), atualizar estoque (estoque seguro do fornecedor principal, ou zero sem fornecedor), pausar e reativar. Toda ação entra no histórico do anúncio, e publicação e sincronização também em `sync_logs`. As ações POST são limitadas a 30 por minuto por usuário.
+- Erros da API são mostrados com os motivos devolvidos pelo Mercado Livre e gravados no anúncio; um anúncio com erro pode ser publicado de novo.
+- **Publicação automática**: a configuração `marketplace.automatic_publish` existe, mas fica desligada e ainda não dispara nada.
+- Desde março de 2026 a tarifa fixa no Brasil depende da logística. Preencha `MELI_LOGISTIC_TYPE` e `MELI_SHIPPING_MODE` para que a tarifa consultada coincida com a cobrada; sem eles, a prévia avisa.
+
 ## Variáveis .env
 
 | Variável | Descrição |
@@ -288,6 +307,7 @@ A integração segue a documentação oficial ([Autenticação e Autorização](
 | `SEED_OPERATOR_EMAIL` / `SEED_OPERATOR_PASSWORD` | Usuário operador criado pelo seeder |
 | `MELI_CLIENT_ID` / `MELI_CLIENT_SECRET` / `MELI_REDIRECT_URI` | Aplicativo do Mercado Livre |
 | `MELI_USE_PKCE` | Envia PKCE S256 na autorização (padrão `true`) |
+| `MELI_LOGISTIC_TYPE` / `MELI_SHIPPING_MODE` | Logística usada na consulta de tarifas (ex.: `drop_off` / `me2`) |
 | `mercadolivre.authUrl` / `mercadolivre.siteId` | Opcional: domínio de autorização e site padrão de outro país |
 
 ## Segurança
@@ -315,7 +335,7 @@ vendor/bin/phpunit --coverage-html build/coverage   # requer Xdebug ou PCOV
 Suítes:
 
 - **unit**: normalização decimal, conector CSV, fábrica de conectores, limpeza de dados sensíveis na auditoria, regras do ranking de fornecedores (incluindo margem mínima), calculador de preço (fórmula, tarifa fixa por faixa, arredondamento, preço manual, percentuais inviáveis) e utilitários do OAuth (PKCE com o vetor da RFC 7636, cifragem e mascaramento de tokens, tradução dos erros da API);
-- **database**: importação CSV, produtos, categorias, fornecedores/ofertas, configurações, motor de seleção (troca automática, histórico, estoque de segurança, confiabilidade), precificação (hierarquia de margens, bloqueio de preço abaixo da mínima, troca de fornecedor por margem, reprecificação por categoria) e Mercado Livre (state e PKCE, troca do code, tokens cifrados, rotação do refresh token, `invalid_grant`, falha de rede, repetição em 401, revogação, categorias e cache), com transporte HTTP falso;
+- **database**: importação CSV, produtos, categorias, fornecedores/ofertas, configurações, motor de seleção (troca automática, histórico, estoque de segurança, confiabilidade), precificação (hierarquia de margens, bloqueio de preço abaixo da mínima, troca de fornecedor por margem, reprecificação por categoria) e Mercado Livre (state e PKCE, troca do code, tokens cifrados, rotação do refresh token, `invalid_grant`, falha de rede, repetição em 401, revogação, categorias e cache) e anúncios (prévia clássica e User Products, bloqueios, publicação com descrição e mapeamento, preço desatualizado, nova tentativa após erro, convergência da tarifa, preço, estoque, pausa, reativação e sincronização), com transporte HTTP falso;
 - **feature**: login/logout, controle de acesso por papel, API interna, proteção CSRF, tela do produto com a explicação da escolha e a composição do preço, simulador, alertas de margem, conexão com o Mercado Livre de ponta a ponta (sem token completo na tela nem na API), explorador de categorias e comandos `suppliers:select` e `meli:refresh-token`.
 
 ## API interna
@@ -342,8 +362,8 @@ Rotas JSON autenticadas por sessão:
 | 3 | Motor de seleção de fornecedor | Concluída |
 | 4 | Precificação | Concluída |
 | 5 | Mercado Livre: OAuth | Concluída |
-| 6 | Publicações | Próxima |
-| 7 | Pedidos | Planejada |
+| 6 | Publicações | Concluída |
+| 7 | Pedidos | Próxima |
 | 8 | Automação (jobs, cron, webhooks) | Planejada |
 | 9 | Outros marketplaces | Planejada |
 

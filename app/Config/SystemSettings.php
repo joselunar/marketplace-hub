@@ -22,6 +22,7 @@ class SystemSettings extends BaseConfig
         'suppliers' => 'Fornecedores',
         'ranking'   => 'Pesos do ranking de fornecedores',
         'sync'      => 'Sincronização',
+        'marketplace' => 'Marketplaces',
     ];
 
     /**
@@ -172,6 +173,14 @@ class SystemSettings extends BaseConfig
             'label'   => 'Atualização automática de preço',
             'default' => false,
             'rules'   => 'permit_empty|in_list[0,1]',
+        ],
+        'marketplace.automatic_publish' => [
+            'group'   => 'marketplace',
+            'type'    => 'bool',
+            'label'   => 'Publicação automática de anúncios (modo futuro)',
+            'default' => false,
+            'rules'   => 'permit_empty|in_list[0,1]',
+            'help'    => 'Reservado para uma próxima fase. Enquanto isso, toda publicação passa pela prévia e precisa ser confirmada.',
         ],
     ];
 }

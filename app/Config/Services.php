@@ -6,6 +6,7 @@ use App\Services\Audit\AuditService;
 use App\Services\Auth\AuthService;
 use App\Services\Marketplaces\MercadoLivre\Http\CurlTransport;
 use App\Services\Marketplaces\MercadoLivre\Http\HttpTransport;
+use App\Services\Marketplaces\MercadoLivre\MercadoLivreProductService;
 use App\Services\Marketplaces\MercadoLivre\MercadoLivreService;
 use App\Services\Pricing\PricingService;
 use App\Services\Settings\SettingsService;
@@ -74,6 +75,15 @@ class Services extends BaseService
         }
 
         return new MercadoLivreService();
+    }
+
+    public static function mercadoLivreProducts(bool $getShared = true): MercadoLivreProductService
+    {
+        if ($getShared) {
+            return static::getSharedInstance('mercadoLivreProducts');
+        }
+
+        return new MercadoLivreProductService();
     }
 
     /**

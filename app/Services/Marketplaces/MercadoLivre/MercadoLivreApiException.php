@@ -9,12 +9,12 @@ use Throwable;
  * Erro devolvido pela API do Mercado Livre (ou falta de resposta, status 0).
  *
  * A mensagem nunca carrega tokens: vem do corpo de erro da API, que só
- * traz código e descrição.
+ * traz código, descrição e, nas validações de anúncio, a lista "cause".
  */
 class MercadoLivreApiException extends RuntimeException
 {
     /**
-     * Códigos de erro descritos na documentação de autenticação.
+     * Códigos de erro descritos na documentação de autenticação e de publicação.
      */
     private const MESSAGES = [
         'invalid_client'           => 'Client ID ou Client Secret inválidos. Confira MELI_CLIENT_ID e MELI_CLIENT_SECRET no .env.',
@@ -27,6 +27,10 @@ class MercadoLivreApiException extends RuntimeException
         'unauthorized_client'      => 'O aplicativo não tem permissão concedida por este usuário. Conecte a conta novamente.',
         'unauthorized_application' => 'O aplicativo está bloqueado no Mercado Livre.',
         'invalid_operator_user_id' => 'O login foi feito com um usuário operador/colaborador. Conecte com a conta administradora.',
+        'validation_error'         => 'O Mercado Livre recusou os dados do anúncio.',
+        'body.invalid_fields'      => 'Há campos inválidos para a categoria escolhida.',
+        'seller.unable_to_list'    => 'O vendedor não está habilitado a anunciar no momento.',
+        'item.category_id.invalid' => 'A categoria enviada não existe no Mercado Livre.',
     ];
 
     /**
@@ -34,20 +38,32 @@ class MercadoLivreApiException extends RuntimeException
      */
     private const REAUTHORIZE = ['invalid_grant', 'unauthorized_client', 'invalid_operator_user_id'];
 
+    private const MAX_CAUSES = 5;
+
+    /**
+     * @param list<array{code: string, message: string, type: string}> $causes
+     */
     public function __construct(
         string $message,
         public readonly int $status = 0,
         public readonly ?string $errorCode = null,
         ?Throwable $previous = null,
+        public readonly array $causes = [],
     ) {
         parent::__construct($message, 0, $previous);
     }
 
     public static function fromResponse(int $status, mixed $body): self
     {
-        $body  = is_array($body) ? $body : [];
-        $code  = is_string($body['error'] ?? null) ? $body['error'] : null;
-        $label = $body['message'] ?? $body['error_description'] ?? null;
+        $body    = is_array($body) ? $body : [];
+        $code    = is_string($body['error'] ?? null) ? $body['error'] : null;
+        $label   = $body['message'] ?? $body['error_description'] ?? null;
+        $message = is_string($body['message'] ?? null) ? $body['message'] : null;
+
+        // Alguns erros de /items vêm invertidos: o código em "message" e a frase em "error".
+        if ($code !== null && $message !== null && str_contains($code, ' ') && ! str_contains($message, ' ')) {
+            [$code, $label] = [$message, $code];
+        }
 
         if ($status === 429 && $code === null) {
             $code = 'local_rate_limited';
@@ -55,12 +71,24 @@ class MercadoLivreApiException extends RuntimeException
 
         $detail = is_string($label) && $label !== '' ? mb_substr($label, 0, 300) : 'HTTP ' . $status;
 
-        return new self($detail, $status, $code);
+        return new self($detail, $status, $code, null, self::parseCauses($body['cause'] ?? null));
     }
 
     public function requiresReauthorization(): bool
     {
         return in_array($this->errorCode, self::REAUTHORIZE, true);
+    }
+
+    /**
+     * Causas do tipo erro (os avisos não impedem a operação).
+     *
+     * @return list<string>
+     */
+    public function errorCauses(): array
+    {
+        $errors = array_filter($this->causes, static fn (array $cause): bool => $cause['type'] !== 'warning');
+
+        return array_values(array_map(static fn (array $cause): string => $cause['message'] !== '' ? $cause['message'] : $cause['code'], $errors));
     }
 
     /**
@@ -79,6 +107,39 @@ class MercadoLivreApiException extends RuntimeException
             default               => 'O Mercado Livre recusou a requisição.',
         };
 
-        return $base . ' (' . ($this->errorCode ?? 'HTTP ' . $this->status) . ': ' . $this->getMessage() . ')';
+        $text   = $base . ' (' . ($this->errorCode ?? 'HTTP ' . $this->status) . ': ' . $this->getMessage() . ')';
+        $causes = $this->errorCauses();
+
+        if ($causes !== []) {
+            $text .= ' Motivos: ' . implode('; ', array_slice($causes, 0, self::MAX_CAUSES)) . '.';
+        }
+
+        return $text;
+    }
+
+    /**
+     * @return list<array{code: string, message: string, type: string}>
+     */
+    private static function parseCauses(mixed $causes): array
+    {
+        if (! is_array($causes)) {
+            return [];
+        }
+
+        $parsed = [];
+
+        foreach ($causes as $cause) {
+            if (! is_array($cause)) {
+                continue;
+            }
+
+            $parsed[] = [
+                'code'    => mb_substr(is_string($cause['code'] ?? null) ? $cause['code'] : '', 0, 100),
+                'message' => mb_substr(is_string($cause['message'] ?? null) ? $cause['message'] : '', 0, 300),
+                'type'    => is_string($cause['type'] ?? null) ? $cause['type'] : 'error',
+            ];
+        }
+
+        return $parsed;
     }
 }

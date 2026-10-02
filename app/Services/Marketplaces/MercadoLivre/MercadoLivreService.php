@@ -93,8 +93,63 @@ class MercadoLivreService
      */
     public function get(int $accountId, string $path, array $query = []): array
     {
+        return $this->withToken($accountId, fn (string $token): array => $this->api->get($path, $token, $query));
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     */
+    public function post(int $accountId, string $path, array $body): array
+    {
+        return $this->withToken($accountId, fn (string $token): array => $this->api->post($path, $token, $body));
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     */
+    public function put(int $accountId, string $path, array $body): array
+    {
+        return $this->withToken($accountId, fn (string $token): array => $this->api->put($path, $token, $body));
+    }
+
+    /**
+     * Tags do vendedor (GET /users/{user_id}). "user_product_seller" indica
+     * que a conta já publica no modelo User Products.
+     *
+     * @return array{tags: list<string>, user_products: bool}
+     */
+    public function seller(array $account, bool $fresh = false): array
+    {
+        $key   = 'meli_seller_' . (int) $account['id'];
+        $cache = service('cache');
+
+        if (! $fresh) {
+            $cached = $cache->get($key);
+            if (is_array($cached)) {
+                return $cached;
+            }
+        }
+
+        $user = $this->get((int) $account['id'], '/users/' . rawurlencode((string) $account['external_user_id']));
+        $tags = array_values(array_filter($user['tags'] ?? [], 'is_string'));
+        $info = ['tags' => $tags, 'user_products' => in_array('user_product_seller', $tags, true)];
+
+        $cache->save($key, $info, $this->config->sellerCacheSeconds);
+
+        return $info;
+    }
+
+    /**
+     * Executa a chamada com o token da conta. Em 401 renova uma vez e repete.
+     *
+     * Um 401 em POST não cria o recurso, então repetir é seguro.
+     *
+     * @param callable(string): array $call
+     */
+    private function withToken(int $accountId, callable $call): array
+    {
         try {
-            return $this->api->get($path, $this->accessToken($accountId), $query);
+            return $call($this->accessToken($accountId));
         } catch (MercadoLivreApiException $e) {
             if ($e->status !== 401) {
                 throw $e;
@@ -103,7 +158,7 @@ class MercadoLivreService
 
         $this->auth->refresh($accountId, true);
 
-        return $this->api->get($path, $this->accessToken($accountId), $query);
+        return $call($this->accessToken($accountId));
     }
 
     public function siteFor(array $account): string

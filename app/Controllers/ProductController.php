@@ -5,6 +5,7 @@ namespace App\Controllers;
 use App\Exceptions\BusinessRuleException;
 use App\Exceptions\ValidationException;
 use App\Models\CategoryModel;
+use App\Models\MarketplaceListingModel;
 use App\Models\ProductImageModel;
 use App\Models\ProductModel;
 use App\Services\Catalog\ProductService;
@@ -55,6 +56,7 @@ class ProductController extends BaseController
         return view('products/show', $details + [
             'title'       => $details['product']['name'],
             'category'    => $category,
+            'listings'    => (new MarketplaceListingModel())->forProduct($id),
             'breadcrumbs' => ['Produtos' => 'products', $details['product']['sku'] => null],
         ]);
     }

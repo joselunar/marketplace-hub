@@ -70,6 +70,18 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
         $routes->get('/', 'MercadoLivreController::index');
         $routes->get('categories', 'MercadoLivreCategoryController::index');
 
+        $routes->get('listings', 'MercadoLivreListingController::index');
+        $routes->get('listings/new', 'MercadoLivreListingController::new');
+        $routes->get('listings/(:num)', 'MercadoLivreListingController::show/$1');
+        $routes->group('listings', ['filter' => 'marketplacethrottle'], static function (RouteCollection $routes): void {
+            $routes->post('/', 'MercadoLivreListingController::create');
+            $routes->post('(:num)/sync', 'MercadoLivreListingController::sync/$1');
+            $routes->post('(:num)/price', 'MercadoLivreListingController::updatePrice/$1');
+            $routes->post('(:num)/stock', 'MercadoLivreListingController::updateStock/$1');
+            $routes->post('(:num)/pause', 'MercadoLivreListingController::pause/$1');
+            $routes->post('(:num)/activate', 'MercadoLivreListingController::activate/$1');
+        });
+
         // Conectar, renovar e desconectar contas mexe em credenciais: só administradores.
         $routes->group('', ['filter' => 'role:admin'], static function (RouteCollection $routes): void {
             $routes->post('connect', 'MercadoLivreController::connect');

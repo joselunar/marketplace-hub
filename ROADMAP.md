@@ -53,13 +53,15 @@
 - Explorador de categorias, atributos (obrigatórios destacados) e preditor de categoria
 - Comando `php spark meli:refresh-token` para o cron e endpoint `GET /api/marketplaces/accounts`
 
-## Fase 6 — Publicações
+## Fase 6 — Publicações ✅
 
-- Criação e atualização de anúncios (modelo User Products quando aplicável)
-- Vínculo produto ↔ anúncio e histórico de publicações
-- Atualização de preço e estoque
-- Tarifas do anúncio consultadas na API oficial do Mercado Livre e usadas no cálculo do preço
-- Publicação automática desabilitada por padrão
+- Publicação com prévia obrigatória (validações, payload, preço, estoque e tarifa) e confirmação explícita
+- Modelo User Products para vendedores com a tag `user_product_seller` (`family_name` em vez de `title`)
+- Tarifas consultadas em `listing_prices` e usadas no cálculo do preço, com cache curto
+- Vínculo produto ↔ anúncio (`marketplace_listings`) e histórico por anúncio (`marketplace_listing_events`)
+- Sincronizar, atualizar preço, atualizar estoque, pausar e reativar
+- Mapeamento categoria interna → categoria do Mercado Livre lembrado após cada publicação
+- Publicação automática prevista nas configurações e desabilitada por padrão
 
 ## Fase 7 — Pedidos
 

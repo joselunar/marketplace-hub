@@ -84,6 +84,7 @@ class MercadoLivreCategoryService
                     'max_pictures_per_item' => isset($settings['max_pictures_per_item']) ? (int) $settings['max_pictures_per_item'] : null,
                     'item_conditions'       => array_values(array_filter($settings['item_conditions'] ?? [], 'is_string')),
                     'buying_modes'          => array_values(array_filter($settings['buying_modes'] ?? [], 'is_string')),
+                    'currencies'            => array_values(array_filter($settings['currencies'] ?? [], 'is_string')),
                     'minimum_price'         => isset($settings['minimum_price']) ? (string) $settings['minimum_price'] : null,
                     'catalog_domain'        => is_string($settings['catalog_domain'] ?? null) ? $settings['catalog_domain'] : null,
                 ],

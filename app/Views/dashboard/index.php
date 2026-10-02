@@ -114,7 +114,7 @@ $cards = [
             <div class="card-body small text-body-secondary">
                 <p class="mb-2">Indicadores de anúncios, pedidos, faturamento, lucro e margem serão exibidos aqui conforme os módulos forem entregues:</p>
                 <ul class="mb-0">
-                    <li>Mercado Livre: anúncios e pedidos (Fases 6 e 7)</li>
+                    <li>Mercado Livre: pedidos (Fase 7)</li>
                     <li>Jobs de sincronização e dashboard completo (Fase 8)</li>
                 </ul>
             </div>

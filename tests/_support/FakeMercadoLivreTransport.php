@@ -23,6 +23,11 @@ final class FakeMercadoLivreTransport implements HttpTransport
      */
     public array $requests = [];
 
+    /**
+     * @var array<string, list<HttpResponse|TransportException>>
+     */
+    private array $routes = [];
+
     public function push(int $status, array|string $body = []): self
     {
         $this->queue[] = new HttpResponse($status, is_string($body) ? $body : json_encode($body));
@@ -37,9 +42,57 @@ final class FakeMercadoLivreTransport implements HttpTransport
         return $this;
     }
 
+    /**
+     * Resposta fixa para um método + caminho (sem query string), usada antes da fila.
+     * Várias respostas para o mesmo caminho são entregues em ordem; a última se repete.
+     */
+    public function on(string $method, string $path, int $status, array|string $body = []): self
+    {
+        $this->routes[strtoupper($method) . ' ' . $path][] = new HttpResponse($status, is_string($body) ? $body : json_encode($body));
+
+        return $this;
+    }
+
+    public function routesReset(string $method, string $path): self
+    {
+        unset($this->routes[strtoupper($method) . ' ' . $path]);
+
+        return $this;
+    }
+
+    public function onFailure(string $method, string $path, string $message = 'timeout'): self
+    {
+        $this->routes[strtoupper($method) . ' ' . $path][] = new TransportException($message);
+
+        return $this;
+    }
+
+    /**
+     * Requisições feitas para um método + caminho.
+     *
+     * @return list<array{method: string, url: string, headers: array<string, string>, body: ?string}>
+     */
+    public function requestsTo(string $method, string $path): array
+    {
+        return array_values(array_filter(
+            $this->requests,
+            static fn (array $request): bool => $request['method'] === strtoupper($method) && parse_url($request['url'], PHP_URL_PATH) === $path,
+        ));
+    }
+
     public function send(string $method, string $url, array $headers = [], ?string $body = null): HttpResponse
     {
         $this->requests[] = ['method' => $method, 'url' => $url, 'headers' => $headers, 'body' => $body];
+
+        $key = strtoupper($method) . ' ' . parse_url($url, PHP_URL_PATH);
+        if (isset($this->routes[$key])) {
+            $next = count($this->routes[$key]) > 1 ? array_shift($this->routes[$key]) : $this->routes[$key][0];
+            if ($next instanceof TransportException) {
+                throw $next;
+            }
+
+            return $next;
+        }
 
         $next = array_shift($this->queue);
         if ($next === null) {
@@ -60,6 +113,14 @@ final class FakeMercadoLivreTransport implements HttpTransport
         parse_str((string) ($this->requests[$index]['body'] ?? ''), $params);
 
         return $params;
+    }
+
+    /**
+     * Corpo JSON de uma requisição, decodificado.
+     */
+    public static function json(array $request): array
+    {
+        return json_decode((string) $request['body'], true, 512, JSON_THROW_ON_ERROR);
     }
 
     public function pending(): int

@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Exceptions\ValidationException;
+use App\Services\Suppliers\SupplierSelectionService;
 use CodeIgniter\HTTP\RedirectResponse;
 
 class SettingsController extends BaseController
@@ -21,11 +22,23 @@ class SettingsController extends BaseController
         $input = (array) ($this->request->getPost('settings') ?? []);
 
         try {
-            service('settings')->updateMany($input, $this->auth()->id());
+            $changed = service('settings')->updateMany($input, $this->auth()->id());
         } catch (ValidationException $e) {
             return $this->backWithErrors($e->getErrors());
         }
 
-        return redirect()->to('/settings')->with('success', 'Configurações salvas.');
+        $affectsSelection = array_filter($changed, static fn (string $key) => preg_match('/^(stock|suppliers|ranking)\./', $key) === 1);
+
+        if ($affectsSelection === []) {
+            return redirect()->to('/settings')->with('success', 'Configurações salvas.');
+        }
+
+        $stats = service('supplierSelection')->selectAll(SupplierSelectionService::TRIGGER_SETTINGS, $this->auth()->id());
+
+        return redirect()->to('/settings')->with('success', sprintf(
+            'Configurações salvas. Seleção de fornecedores recalculada para %d produto(s); %d troca(s) de fornecedor principal.',
+            $stats['evaluated'],
+            $stats['changed'],
+        ));
     }
 }

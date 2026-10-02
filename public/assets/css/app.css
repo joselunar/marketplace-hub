@@ -136,6 +136,21 @@ body.app {
     background: #e5e7eb;
 }
 
+/* Motor de seleção */
+.selection-score {
+    font-size: 2.4rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.criteria-bar {
+    height: .35rem;
+}
+
+.table-active-selection > td {
+    background-color: rgba(25, 135, 84, .06);
+}
+
 .autocomplete-menu {
     position: absolute;
     z-index: 1050;

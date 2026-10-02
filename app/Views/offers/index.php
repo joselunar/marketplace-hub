@@ -32,6 +32,7 @@
                     <option value="active" <?= ($filters['status'] ?? '') === 'active' ? 'selected' : '' ?>>Ativas</option>
                     <option value="inactive" <?= ($filters['status'] ?? '') === 'inactive' ? 'selected' : '' ?>>Inativas</option>
                     <option value="out_of_stock" <?= ($filters['status'] ?? '') === 'out_of_stock' ? 'selected' : '' ?>>Sem estoque</option>
+                    <option value="blocked" <?= ($filters['status'] ?? '') === 'blocked' ? 'selected' : '' ?>>Bloqueadas</option>
                 </select>
             </div>
             <div class="col-auto">
@@ -79,7 +80,15 @@
                     <td class="text-center"><?= stock_badge($offer['stock_quantity']) ?></td>
                     <td class="text-end text-nowrap small"><?= money($offer['shipping_cost']) ?></td>
                     <td class="small"><?= format_datetime($offer['last_sync_at'] ?? $offer['updated_at']) ?></td>
-                    <td><?= active_badge($offer['active']) ?></td>
+                    <td>
+                        <?= active_badge($offer['active']) ?>
+                        <?php if ((int) $offer['blocked'] === 1): ?>
+                            <span title="<?= esc((string) $offer['blocked_reason'], 'attr') ?>"><?= badge('Bloqueada', 'danger') ?></span>
+                        <?php endif ?>
+                        <?php if ($offer['selection_rank'] !== null): ?>
+                            <?= selection_position_badge((int) $offer['selection_rank']) ?>
+                        <?php endif ?>
+                    </td>
                     <td class="text-end text-nowrap">
                         <a href="<?= site_url('offers/' . $offer['id'] . '/edit') ?>" class="btn btn-sm btn-outline-secondary" title="Editar / vincular"><i class="bi bi-pencil"></i></a>
                         <?php if (is_admin()): ?>

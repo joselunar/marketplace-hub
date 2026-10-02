@@ -34,6 +34,7 @@ class SupplierImportService
         private readonly SyncLogModel $syncLogs = new SyncLogModel(),
         private readonly SupplierConnectorFactory $connectors = new SupplierConnectorFactory(),
         private readonly ?AuditService $audit = null,
+        private readonly ?SupplierSelectionService $selection = null,
     ) {
     }
 
@@ -106,6 +107,9 @@ class SupplierImportService
         ]);
 
         $this->audit()->log('import', 'supplier', (int) $supplier['id'], null, ['import_id' => $importId, 'file' => $originalName] + $stats, $userId);
+
+        // Custos, estoques e o histórico de sincronização do fornecedor mudaram.
+        $this->selection()->selectForSupplier($supplierId, SupplierSelectionService::TRIGGER_IMPORT, $userId);
 
         return $importId;
     }
@@ -250,10 +254,18 @@ class SupplierImportService
             'started_at'       => $startedAt,
             'finished_at'      => $now,
         ]);
+
+        // A falha conta na confiabilidade do fornecedor.
+        $this->selection()->selectForSupplier($supplierId, SupplierSelectionService::TRIGGER_IMPORT);
     }
 
     private function audit(): AuditService
     {
         return $this->audit ?? service('audit');
+    }
+
+    private function selection(): SupplierSelectionService
+    {
+        return $this->selection ?? service('supplierSelection');
     }
 }

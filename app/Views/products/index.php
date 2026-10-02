@@ -46,6 +46,14 @@
                 </select>
             </div>
             <div class="col-sm-4 col-lg-2">
+                <label class="form-label" for="selection">Seleção</label>
+                <select class="form-select form-select-sm" id="selection" name="selection">
+                    <option value="">Todas</option>
+                    <option value="selected" <?= ($filters['selection'] ?? '') === 'selected' ? 'selected' : '' ?>>Com fornecedor elegível</option>
+                    <option value="none" <?= ($filters['selection'] ?? '') === 'none' ? 'selected' : '' ?>>Sem fornecedor elegível</option>
+                </select>
+            </div>
+            <div class="col-sm-4 col-lg-2">
                 <label class="form-label" for="stock">Estoque</label>
                 <select class="form-select form-select-sm" id="stock" name="stock">
                     <option value="">Todos</option>
@@ -76,6 +84,7 @@
                 <th class="text-center">Ofertas</th>
                 <th class="text-end">Menor custo</th>
                 <th class="text-center">Estoque fornecedores</th>
+                <th>Fornecedor selecionado</th>
                 <th>Status</th>
                 <th class="text-end">Ações</th>
             </tr>
@@ -97,6 +106,15 @@
                     </td>
                     <td class="text-end small text-nowrap"><?= money($product['min_cost']) ?></td>
                     <td class="text-center"><?= stock_badge($product['total_stock']) ?></td>
+                    <td class="small">
+                        <?php if ($product['selected_supplier_name'] !== null): ?>
+                            <?= esc($product['selected_supplier_name']) ?> <span class="text-body-secondary">(<?= score_format($product['selected_score']) ?>)</span>
+                        <?php elseif ((int) $product['offers_count'] > 0): ?>
+                            <?= badge('Nenhum elegível', 'danger') ?>
+                        <?php else: ?>
+                            <span class="text-body-secondary">—</span>
+                        <?php endif ?>
+                    </td>
                     <td><?= active_badge($product['active']) ?></td>
                     <td class="text-end text-nowrap">
                         <a href="<?= site_url('products/' . $product['id']) ?>" class="btn btn-sm btn-outline-secondary" title="Detalhes"><i class="bi bi-eye"></i></a>

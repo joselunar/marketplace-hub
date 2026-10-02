@@ -7,6 +7,7 @@ use App\Models\ProductImageModel;
 use App\Models\ProductModel;
 use App\Models\SupplierModel;
 use App\Models\SupplierOfferModel;
+use App\Services\Suppliers\SupplierSelectionService;
 use App\Support\Input;
 use CodeIgniter\Database\Seeder;
 
@@ -39,7 +40,7 @@ class CatalogSeeder extends Seeder
             'sku' => 'CX-SOM-MINI', 'ean' => '7890000000031', 'name' => 'Caixa de Som Portátil Mini 10W', 'brand' => 'SoundMax',
             'category' => 'audio', 'weight' => '0.450', 'height' => '15', 'width' => '10', 'length' => '10', 'active' => 1,
             'offers' => [
-                'Distribuidora Alpha' => ['sku' => 'ALP-CX10', 'cost' => '89.90', 'stock' => 12, 'shipping' => '14.00', 'days' => null],
+                'Distribuidora Alpha' => ['sku' => 'ALP-CX10', 'cost' => '89.90', 'stock' => 12, 'shipping' => '14.00', 'days' => null, 'blocked_reason' => 'Lote com defeito reportado por clientes'],
                 'Fornecedor Gamma'    => ['sku' => 'GM-CX-10W', 'cost' => '92.00', 'stock' => 40, 'shipping' => '11.00', 'days' => 6],
             ],
         ],
@@ -65,7 +66,7 @@ class CatalogSeeder extends Seeder
         ],
         [
             'sku' => 'TEC-MEC-RGB', 'ean' => '7890000000079', 'name' => 'Teclado Mecânico RGB Switch Blue', 'brand' => 'KeyForce',
-            'category' => 'perifericos', 'weight' => '1.100', 'height' => '5', 'width' => '15', 'length' => '45', 'active' => 1,
+            'category' => 'perifericos', 'weight' => '1.100', 'height' => '5', 'width' => '15', 'length' => '45', 'active' => 1, 'safety_stock' => 4,
             'offers' => [
                 'Distribuidora Alpha' => ['sku' => 'ALP-TKRGB', 'cost' => '175.00', 'stock' => 5, 'shipping' => '18.00', 'days' => null],
                 'Fornecedor Gamma'    => ['sku' => 'GM-TEC-BLUE', 'cost' => '180.00', 'stock' => 8, 'shipping' => '15.00', 'days' => 10],
@@ -113,6 +114,7 @@ class CatalogSeeder extends Seeder
                 'height'      => $data['height'],
                 'width'       => $data['width'],
                 'length'      => $data['length'],
+                'safety_stock' => $data['safety_stock'] ?? null,
                 'active'      => $data['active'],
             ]);
             $productId = (int) $products->getInsertID();
@@ -138,6 +140,8 @@ class CatalogSeeder extends Seeder
                     'shipping_cost'         => $offer['shipping'],
                     'shipping_days'         => $offer['days'],
                     'active'                => 1,
+                    'blocked'               => isset($offer['blocked_reason']) ? 1 : 0,
+                    'blocked_reason'        => $offer['blocked_reason'] ?? null,
                     'last_sync_at'          => $now,
                 ]);
             }
@@ -160,5 +164,7 @@ class CatalogSeeder extends Seeder
                 'last_sync_at'          => $now,
             ]);
         }
+
+        service('supplierSelection')->selectAll(SupplierSelectionService::TRIGGER_SEED);
     }
 }

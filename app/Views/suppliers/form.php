@@ -87,6 +87,12 @@ $value  = static fn (string $field, mixed $default = '') => old($field) ?? ($sup
                         <input type="number" class="form-control<?= invalid_class('default_shipping_days') ?>" id="default_shipping_days" name="default_shipping_days" min="0" max="365" value="<?= esc((string) $value('default_shipping_days'), 'attr') ?>">
                         <div class="invalid-feedback"><?= esc(field_error('default_shipping_days') ?? '') ?></div>
                     </div>
+                    <div class="mb-3">
+                        <label for="safety_stock" class="form-label">Estoque de segurança (unidades)</label>
+                        <input type="number" class="form-control<?= invalid_class('safety_stock') ?>" id="safety_stock" name="safety_stock" min="0" max="65535" value="<?= esc((string) $value('safety_stock'), 'attr') ?>">
+                        <div class="form-text">Vazio = usa o valor global. O valor definido no produto prevalece sobre este.</div>
+                        <div class="invalid-feedback"><?= esc(field_error('safety_stock') ?? '') ?></div>
+                    </div>
                 </div>
             </div>
         </div>

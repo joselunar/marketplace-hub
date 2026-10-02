@@ -21,6 +21,7 @@ class SupplierService
         private readonly SyncLogModel $syncLogs = new SyncLogModel(),
         private readonly SupplierImportModel $imports = new SupplierImportModel(),
         private readonly ?AuditService $audit = null,
+        private readonly ?SupplierSelectionService $selection = null,
     ) {
     }
 
@@ -48,6 +49,9 @@ class SupplierService
         }
 
         $this->audit()->log('update', 'supplier', $id, $current, $data);
+
+        // Status, prioridade, prazo e estoque de segurança afetam o ranking.
+        $this->selection()->selectForSupplier($id, SupplierSelectionService::TRIGGER_SUPPLIER);
     }
 
     public function delete(int $id): void
@@ -105,7 +109,7 @@ class SupplierService
     {
         $data = Input::only($input, [
             'name', 'legal_name', 'document', 'email', 'phone', 'website',
-            'integration_type', 'status', 'priority', 'default_shipping_days', 'notes',
+            'integration_type', 'status', 'priority', 'default_shipping_days', 'safety_stock', 'notes',
         ]);
 
         $data['name']     = $data['name'] ?? '';
@@ -123,5 +127,10 @@ class SupplierService
     private function audit(): AuditService
     {
         return $this->audit ?? service('audit');
+    }
+
+    private function selection(): SupplierSelectionService
+    {
+        return $this->selection ?? service('supplierSelection');
     }
 }

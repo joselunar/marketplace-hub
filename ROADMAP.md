@@ -20,18 +20,22 @@
 - Importação CSV com vínculo automático por SKU/EAN e histórico
 - API interna de produtos e fornecedores
 
-## Fase 3 — Motor de seleção
+## Fase 3 — Motor de seleção ✅
 
-- `SupplierSelectionService`: escolha do melhor fornecedor por produto
-- Estoque de segurança (estoque disponível = estoque − margem de segurança)
+- `SupplierSelectionService`: fornecedor principal e duas reservas por produto
+- Estoque de segurança global, por fornecedor e por produto (o mais específico prevalece)
+- Critérios eliminatórios, incluindo bloqueio manual da oferta com motivo
 - Ranking ponderado (preço, estoque, prazo, confiabilidade, prioridade) com pesos configuráveis
-- Fallback automático quando o fornecedor escolhido fica sem estoque
-- Explicação da escolha exibida na tela do produto
+- Confiabilidade calculada a partir do histórico de sincronizações
+- Troca automática quando o principal fica inelegível, com histórico e auditoria
+- Explicação da escolha na tela do produto, alerta no dashboard e endpoint `GET /api/products/{id}/selection`
+- Comando `php spark suppliers:select` para o cron
 
 ## Fase 4 — Precificação
 
 - `PricingService`: custo + frete + impostos + tarifas + margem desejada
 - Margem mínima e bloqueio de preços abaixo dela
+- Critério eliminatório de margem mínima no motor de seleção
 - Regras de arredondamento e simulação de preço
 - Tarifas do marketplace obtidas da fonte oficial, nunca fixas no código
 

@@ -14,7 +14,7 @@ class SupplierModel extends Model
     protected $useTimestamps = true;
     protected $allowedFields = [
         'name', 'legal_name', 'document', 'email', 'phone', 'website',
-        'integration_type', 'status', 'priority', 'default_shipping_days', 'notes',
+        'integration_type', 'status', 'priority', 'default_shipping_days', 'safety_stock', 'notes',
     ];
     protected $validationMessages = [
         'document' => ['is_unique' => 'Já existe um fornecedor com este documento.'],
@@ -34,6 +34,7 @@ class SupplierModel extends Model
             'status'                => 'required|' . SupplierStatus::inListRule(),
             'priority'              => 'required|is_natural|less_than_equal_to[10]',
             'default_shipping_days' => 'permit_empty|is_natural|less_than_equal_to[365]',
+            'safety_stock'          => 'permit_empty|is_natural|less_than_equal_to[65535]',
             'notes'                 => 'permit_empty|max_length[5000]',
         ];
     }

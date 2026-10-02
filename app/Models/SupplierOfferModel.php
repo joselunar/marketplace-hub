@@ -12,7 +12,7 @@ class SupplierOfferModel extends Model
     protected $useTimestamps = true;
     protected $allowedFields = [
         'supplier_id', 'product_id', 'supplier_sku', 'supplier_product_name', 'ean',
-        'cost_price', 'stock_quantity', 'shipping_cost', 'shipping_days', 'active', 'last_sync_at',
+        'cost_price', 'stock_quantity', 'shipping_cost', 'shipping_days', 'active', 'blocked', 'blocked_reason', 'last_sync_at',
     ];
     protected $validationRules = [
         'id'                    => 'permit_empty|is_natural_no_zero',
@@ -26,6 +26,8 @@ class SupplierOfferModel extends Model
         'shipping_cost'         => 'permit_empty|decimal|greater_than_equal_to[0]|less_than[10000000000000]',
         'shipping_days'         => 'permit_empty|is_natural|less_than_equal_to[365]',
         'active'                => 'permit_empty|in_list[0,1]',
+        'blocked'               => 'permit_empty|in_list[0,1]',
+        'blocked_reason'        => 'permit_empty|max_length[255]',
     ];
     protected $validationMessages = [
         'supplier_id' => ['is_not_unique' => 'Fornecedor inválido.'],
@@ -40,7 +42,8 @@ class SupplierOfferModel extends Model
     {
         $this->select(
             'supplier_offers.*, suppliers.name AS supplier_name, suppliers.status AS supplier_status, '
-            . 'suppliers.default_shipping_days, products.name AS product_name, products.sku AS product_sku',
+            . 'suppliers.default_shipping_days, suppliers.priority AS supplier_priority, suppliers.safety_stock AS supplier_safety_stock, '
+            . 'products.name AS product_name, products.sku AS product_sku',
         )
             ->join('suppliers', 'suppliers.id = supplier_offers.supplier_id')
             ->join('products', 'products.id = supplier_offers.product_id', 'left');
@@ -74,6 +77,8 @@ class SupplierOfferModel extends Model
             $this->where('supplier_offers.active', 0);
         } elseif (($filters['status'] ?? '') === 'out_of_stock') {
             $this->where('supplier_offers.stock_quantity', 0);
+        } elseif (($filters['status'] ?? '') === 'blocked') {
+            $this->where('supplier_offers.blocked', 1);
         }
 
         return $this;
@@ -83,6 +88,8 @@ class SupplierOfferModel extends Model
     {
         return $this->withRelations()
             ->where('supplier_offers.product_id', $productId)
+            ->orderBy('supplier_offers.selection_rank IS NULL', '', false)
+            ->orderBy('supplier_offers.selection_rank')
             ->orderBy('supplier_offers.cost_price')
             ->findAll();
     }

@@ -8,6 +8,7 @@ use App\Models\ProductImageModel;
 use App\Models\ProductModel;
 use App\Models\SupplierOfferModel;
 use App\Services\Audit\AuditService;
+use App\Services\Suppliers\SupplierSelectionService;
 use App\Support\Decimal;
 use App\Support\Input;
 
@@ -20,6 +21,7 @@ class ProductService
         private readonly ProductImageModel $images = new ProductImageModel(),
         private readonly SupplierOfferModel $offers = new SupplierOfferModel(),
         private readonly ?AuditService $audit = null,
+        private readonly ?SupplierSelectionService $selection = null,
     ) {
     }
 
@@ -79,6 +81,12 @@ class ProductService
             $current + ['images' => implode("\n", $currentImages)],
             $data + ['images' => implode("\n", $images)],
         );
+
+        $safety = static fn (mixed $value): ?string => $value === null ? null : (string) $value;
+
+        if ($safety($current['safety_stock'] ?? null) !== $safety($data['safety_stock'] ?? null)) {
+            $this->selection()->select($id, SupplierSelectionService::TRIGGER_PRODUCT);
+        }
     }
 
     /**
@@ -109,15 +117,17 @@ class ProductService
         $product = $this->findOrFail($id);
 
         return [
-            'product' => $product,
-            'images'  => $this->images->forProduct($id),
-            'offers'  => $this->offers->forProduct($id),
+            'product'   => $product,
+            'images'    => $this->images->forProduct($id),
+            'offers'    => $this->offers->forProduct($id),
+            'selection' => $this->selection()->evaluate($id),
+            'history'   => $this->selection()->history($id),
         ];
     }
 
     private function prepare(array $input, ?int $id = null, ?string $currentSlug = null): array
     {
-        $data = Input::only($input, ['sku', 'ean', 'name', 'description', 'brand', 'category_id', 'weight', 'height', 'width', 'length']);
+        $data = Input::only($input, ['sku', 'ean', 'name', 'description', 'brand', 'category_id', 'weight', 'height', 'width', 'length', 'safety_stock']);
 
         $data['sku']         = isset($data['sku']) ? strtoupper($data['sku']) : '';
         $data['name']        = $data['name'] ?? '';
@@ -233,5 +243,10 @@ class ProductService
     private function audit(): AuditService
     {
         return $this->audit ?? service('audit');
+    }
+
+    private function selection(): SupplierSelectionService
+    {
+        return $this->selection ?? service('supplierSelection');
     }
 }

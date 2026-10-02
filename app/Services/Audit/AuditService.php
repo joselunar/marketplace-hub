@@ -88,7 +88,7 @@ class AuditService
         return [$before, $after];
     }
 
-    private function currentUserId(): ?int
+    public function currentUserId(): ?int
     {
         if (is_cli() && ENVIRONMENT !== 'testing') {
             return null;

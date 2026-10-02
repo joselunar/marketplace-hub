@@ -3,6 +3,7 @@
 use App\Enums\SupplierIntegrationType;
 use App\Enums\SupplierStatus;
 use App\Enums\UserRole;
+use App\Services\Suppliers\SupplierSelectionService;
 
 if (! function_exists('money')) {
     /**
@@ -107,6 +108,49 @@ if (! function_exists('stock_badge')) {
         $quantity = (int) $quantity;
 
         return $quantity > 0 ? badge((string) $quantity, 'success') : badge('Sem estoque', 'warning');
+    }
+}
+
+if (! function_exists('score_format')) {
+    function score_format(float|string|null $score): string
+    {
+        return $score === null || $score === '' ? '—' : number_format((float) $score, 1, ',', '.');
+    }
+}
+
+if (! function_exists('rating_badge')) {
+    /**
+     * Classificação qualitativa de uma nota (excelente, bom, regular, fraco).
+     */
+    function rating_badge(string $rating): string
+    {
+        $variant = match ($rating) {
+            'excelente' => 'success',
+            'bom'       => 'primary',
+            'regular'   => 'warning',
+            default     => 'danger',
+        };
+
+        return badge(ucfirst($rating), $variant);
+    }
+}
+
+if (! function_exists('selection_position_badge')) {
+    function selection_position_badge(?int $rank): string
+    {
+        return match (true) {
+            $rank === null => badge('Inelegível', 'secondary'),
+            $rank === 1    => badge('Principal', 'success'),
+            $rank <= 3     => badge('Reserva #' . ($rank - 1), 'info'),
+            default        => badge('Elegível', 'light'),
+        };
+    }
+}
+
+if (! function_exists('selection_trigger_label')) {
+    function selection_trigger_label(string $trigger): string
+    {
+        return SupplierSelectionService::TRIGGER_LABELS[$trigger] ?? $trigger;
     }
 }
 

@@ -16,6 +16,7 @@ final class SettingsServiceTest extends DatabaseTestCase
             'pricing.estimated_tax_percentage'  => '6',
             'stock.safety_quantity'             => '3',
             'suppliers.max_shipping_days'       => '5',
+            'suppliers.reliability_window_days' => '30',
             'ranking.weight_price'              => '40',
             'ranking.weight_stock'              => '20',
             'ranking.weight_shipping'           => '20',
@@ -70,5 +71,15 @@ final class SettingsServiceTest extends DatabaseTestCase
         $this->expectException(ValidationException::class);
 
         (new SettingsService())->updateMany($this->validInput(['pricing.minimum_margin_percentage' => '40']));
+    }
+
+    public function testReportsChangedKeys(): void
+    {
+        $settings = new SettingsService();
+        $settings->updateMany($this->validInput());
+
+        $changed = (new SettingsService())->updateMany($this->validInput(['ranking.weight_price' => '45']));
+
+        $this->assertSame(['ranking.weight_price'], $changed);
     }
 }

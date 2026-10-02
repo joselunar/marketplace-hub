@@ -14,6 +14,7 @@ class SupplierOfferService
     public function __construct(
         private readonly SupplierOfferModel $offers = new SupplierOfferModel(),
         private readonly ?AuditService $audit = null,
+        private readonly ?SupplierSelectionService $selection = null,
     ) {
     }
 
@@ -29,6 +30,10 @@ class SupplierOfferService
 
         $this->audit()->log('create', 'supplier_offer', $id, null, $data);
 
+        if ($data['product_id'] !== null) {
+            $this->selection()->select($data['product_id'], SupplierSelectionService::TRIGGER_OFFER);
+        }
+
         return $id;
     }
 
@@ -43,14 +48,22 @@ class SupplierOfferService
         }
 
         $this->audit()->log('update', 'supplier_offer', $id, $current, $data);
+        $this->reselectAfterProductChange($id, $this->productId($current), $data['product_id']);
     }
 
     public function delete(int $id): void
     {
-        $current = $this->findOrFail($id);
+        $current  = $this->findOrFail($id);
+        $snapshot = $this->selection()->snapshotIfSelected($id);
 
         $this->offers->delete($id);
         $this->audit()->log('delete', 'supplier_offer', $id, $current, null);
+
+        $productId = $this->productId($current);
+
+        if ($productId !== null) {
+            $this->selection()->select($productId, SupplierSelectionService::TRIGGER_OFFER, null, $snapshot);
+        }
     }
 
     /**
@@ -66,6 +79,7 @@ class SupplierOfferService
         }
 
         $this->audit()->log($productId === null ? 'unlink' : 'link', 'supplier_offer', $id, $current, $data);
+        $this->reselectAfterProductChange($id, $this->productId($current), $productId);
     }
 
     public function findOrFail(int $id): array
@@ -79,11 +93,33 @@ class SupplierOfferService
         return $offer;
     }
 
+    /**
+     * Recalcula o produto antigo (se a oferta saiu dele) e o atual.
+     * A oferta só perde o resultado da avaliação depois que o produto antigo
+     * foi recalculado, para o histórico ainda enxergar o score anterior.
+     */
+    private function reselectAfterProductChange(int $offerId, ?int $oldProductId, ?int $newProductId): void
+    {
+        if ($oldProductId !== null && $oldProductId !== $newProductId) {
+            $this->selection()->select($oldProductId, SupplierSelectionService::TRIGGER_OFFER);
+            $this->selection()->resetOffer($offerId);
+        }
+
+        if ($newProductId !== null) {
+            $this->selection()->select($newProductId, SupplierSelectionService::TRIGGER_OFFER);
+        }
+    }
+
+    private function productId(array $offer): ?int
+    {
+        return $offer['product_id'] !== null ? (int) $offer['product_id'] : null;
+    }
+
     private function prepare(array $input, ?int $id = null): array
     {
         $data = Input::only($input, [
             'supplier_id', 'product_id', 'supplier_sku', 'supplier_product_name', 'ean',
-            'cost_price', 'stock_quantity', 'shipping_cost', 'shipping_days',
+            'cost_price', 'stock_quantity', 'shipping_cost', 'shipping_days', 'blocked_reason',
         ]);
 
         $data['supplier_id']    = isset($data['supplier_id']) ? (int) $data['supplier_id'] : null;
@@ -92,7 +128,17 @@ class SupplierOfferService
         $data['cost_price']     = $this->money($data['cost_price'] ?? null);
         $data['shipping_cost']  = $this->money($data['shipping_cost'] ?? null) ?? '0.00';
         $data['stock_quantity'] = $data['stock_quantity'] ?? null;
+        $data['shipping_days']  = $data['shipping_days'] ?? null;
         $data['active']         = Input::flag($input['active'] ?? 0);
+        $data['blocked']        = Input::flag($input['blocked'] ?? 0);
+
+        if ($data['blocked'] === 1 && ($data['blocked_reason'] ?? null) === null) {
+            throw new ValidationException(['blocked_reason' => 'Informe o motivo do bloqueio.']);
+        }
+
+        if ($data['blocked'] === 0) {
+            $data['blocked_reason'] = null;
+        }
 
         if ($id !== null) {
             $data['id'] = $id;
@@ -129,5 +175,10 @@ class SupplierOfferService
     private function audit(): AuditService
     {
         return $this->audit ?? service('audit');
+    }
+
+    private function selection(): SupplierSelectionService
+    {
+        return $this->selection ?? service('supplierSelection');
     }
 }

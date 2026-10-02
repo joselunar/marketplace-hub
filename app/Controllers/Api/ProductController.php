@@ -2,6 +2,7 @@
 
 namespace App\Controllers\Api;
 
+use App\Exceptions\BusinessRuleException;
 use App\Models\ProductImageModel;
 use App\Models\ProductModel;
 use App\Models\SupplierOfferModel;
@@ -73,9 +74,28 @@ class ProductController extends BaseApiController
             'shipping_cost'         => $offer['shipping_cost'],
             'shipping_days'         => $offer['shipping_days'] !== null ? (int) $offer['shipping_days'] : null,
             'active'                => (int) $offer['active'] === 1,
+            'blocked'               => (int) $offer['blocked'] === 1,
+            'available_stock'       => $offer['available_stock'] !== null ? (int) $offer['available_stock'] : null,
+            'selection_score'       => $offer['selection_score'],
+            'selection_rank'        => $offer['selection_rank'] !== null ? (int) $offer['selection_rank'] : null,
+            'ineligibility_reason'  => $offer['ineligibility_reason'],
             'last_sync_at'          => $offer['last_sync_at'],
         ], (new SupplierOfferModel())->forProduct($id));
 
         return $this->respond(['data' => $offers]);
+    }
+
+    /**
+     * Ranking atual das ofertas do produto, com os motivos de cada posição.
+     */
+    public function selection(int $id): ResponseInterface
+    {
+        try {
+            $result = service('supplierSelection')->evaluate($id);
+        } catch (BusinessRuleException $e) {
+            return $this->failNotFound($e->getMessage());
+        }
+
+        return $this->respond(['data' => $result->toArray()]);
     }
 }

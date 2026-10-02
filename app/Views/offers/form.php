@@ -5,6 +5,7 @@
 $action = $offer === null ? site_url('offers') : site_url('offers/' . $offer['id']);
 $value  = static fn (string $field, mixed $default = '') => old($field) ?? ($offer[$field] ?? $prefill[$field] ?? $default);
 $active = old('active') ?? ($offer['active'] ?? 1);
+$blocked = old('blocked') ?? ($offer['blocked'] ?? 0);
 $moneyValue = static function (string $field) use ($offer): string {
     $old = old($field);
 
@@ -102,6 +103,19 @@ $moneyValue = static function (string $field) use ($offer): string {
                             <input class="form-check-input" type="checkbox" role="switch" id="active" name="active" value="1" <?= (int) $active === 1 ? 'checked' : '' ?>>
                             <label class="form-check-label" for="active">Oferta ativa</label>
                         </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check form-switch">
+                            <input type="hidden" name="blocked" value="0">
+                            <input class="form-check-input" type="checkbox" role="switch" id="blocked" name="blocked" value="1" <?= (int) $blocked === 1 ? 'checked' : '' ?>>
+                            <label class="form-check-label" for="blocked">Bloquear manualmente</label>
+                        </div>
+                        <div class="form-text">Ofertas bloqueadas nunca são selecionadas pelo motor de seleção.</div>
+                    </div>
+                    <div class="col-12">
+                        <label for="blocked_reason" class="form-label">Motivo do bloqueio</label>
+                        <input type="text" class="form-control<?= invalid_class('blocked_reason') ?>" id="blocked_reason" name="blocked_reason" value="<?= esc((string) $value('blocked_reason'), 'attr') ?>" maxlength="255" placeholder="Ex.: atrasos recorrentes na postagem">
+                        <div class="invalid-feedback"><?= esc(field_error('blocked_reason') ?? '') ?></div>
                     </div>
                 </div>
             </div>

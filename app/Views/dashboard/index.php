@@ -27,13 +27,19 @@ $cards = [
 
 <div class="row g-3">
     <div class="col-12 col-xl-7">
-        <div class="card h-100">
+        <div class="card">
             <div class="card-header bg-white fw-semibold"><i class="bi bi-bell me-1"></i> Alertas</div>
             <ul class="list-group list-group-flush">
                 <?php if ($summary['productsWithoutOffer'] > 0): ?>
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                         <span><i class="bi bi-exclamation-triangle text-warning me-2"></i><?= $summary['productsWithoutOffer'] ?> produto(s) ativo(s) sem nenhuma oferta de fornecedor</span>
                         <a href="<?= site_url('products?supplier=without') ?>" class="btn btn-sm btn-outline-secondary">Ver</a>
+                    </li>
+                <?php endif ?>
+                <?php if ($summary['productsWithoutEligibleSupplier'] > 0): ?>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-x-octagon text-danger me-2"></i><?= $summary['productsWithoutEligibleSupplier'] ?> produto(s) ativo(s) sem fornecedor disponível (nenhuma oferta elegível)</span>
+                        <a href="<?= site_url('products?status=active&selection=none') ?>" class="btn btn-sm btn-outline-secondary">Ver</a>
                     </li>
                 <?php endif ?>
                 <?php if ($summary['unlinkedOffers'] > 0): ?>
@@ -51,7 +57,7 @@ $cards = [
                         <div class="small text-body-secondary mt-1"><?= esc($log['message']) ?></div>
                     </li>
                 <?php endforeach ?>
-                <?php if ($summary['productsWithoutOffer'] === 0 && $summary['unlinkedOffers'] === 0 && $summary['recentSyncErrors'] === []): ?>
+                <?php if ($summary['productsWithoutOffer'] === 0 && $summary['productsWithoutEligibleSupplier'] === 0 && $summary['unlinkedOffers'] === 0 && $summary['recentSyncErrors'] === []): ?>
                     <li class="list-group-item text-body-secondary small"><i class="bi bi-check-circle text-success me-1"></i> Nenhum alerta no momento.</li>
                 <?php endif ?>
             </ul>
@@ -59,12 +65,29 @@ $cards = [
     </div>
 
     <div class="col-12 col-xl-5">
-        <div class="card h-100">
+        <div class="card mb-3">
+            <div class="card-header bg-white fw-semibold"><i class="bi bi-arrow-left-right me-1"></i> Trocas recentes de fornecedor</div>
+            <ul class="list-group list-group-flush">
+                <?php foreach ($summary['recentSupplierChanges'] as $change): ?>
+                    <li class="list-group-item small">
+                        <div class="d-flex justify-content-between">
+                            <a href="<?= site_url('products/' . $change['product_id']) ?>" class="text-decoration-none fw-medium"><?= esc($change['product_sku']) ?></a>
+                            <span class="text-body-secondary"><?= format_datetime($change['created_at']) ?></span>
+                        </div>
+                        <div><?= esc($change['previous_supplier_name'] ?? '—') ?> <i class="bi bi-arrow-right"></i> <strong><?= esc($change['new_supplier_name'] ?? 'Nenhum') ?></strong></div>
+                        <div class="text-body-secondary"><?= esc($change['reason']) ?></div>
+                    </li>
+                <?php endforeach ?>
+                <?php if ($summary['recentSupplierChanges'] === []): ?>
+                    <li class="list-group-item small text-body-secondary">Nenhuma troca registrada.</li>
+                <?php endif ?>
+            </ul>
+        </div>
+        <div class="card">
             <div class="card-header bg-white fw-semibold"><i class="bi bi-signpost-split me-1"></i> Próximos módulos</div>
             <div class="card-body small text-body-secondary">
                 <p class="mb-2">Indicadores de anúncios, pedidos, faturamento, lucro e margem serão exibidos aqui conforme os módulos forem entregues:</p>
                 <ul class="mb-0">
-                    <li>Motor de seleção de fornecedores e estoque de segurança (Fase 3)</li>
                     <li>Precificação e margens (Fase 4)</li>
                     <li>Mercado Livre: conexão OAuth, anúncios e pedidos (Fases 5 a 7)</li>
                     <li>Jobs de sincronização e dashboard completo (Fase 8)</li>

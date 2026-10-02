@@ -62,6 +62,15 @@ class SystemSettings extends BaseConfig
             'label'   => 'Prazo máximo do fornecedor (dias)',
             'default' => 7,
             'rules'   => 'required|is_natural_no_zero',
+            'help'    => 'Ofertas com prazo de postagem acima deste limite ficam inelegíveis.',
+        ],
+        'suppliers.reliability_window_days' => [
+            'group'   => 'suppliers',
+            'type'    => 'int',
+            'label'   => 'Janela de confiabilidade (dias)',
+            'default' => 30,
+            'rules'   => 'required|is_natural_no_zero|less_than_equal_to[365]',
+            'help'    => 'Período de sincronizações considerado no cálculo de confiabilidade do fornecedor.',
         ],
         'ranking.weight_price' => [
             'group'   => 'ranking',

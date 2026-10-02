@@ -85,6 +85,12 @@ $active = old('active') ?? ($product['active'] ?? 1);
                         </select>
                         <div class="invalid-feedback"><?= esc(field_error('category_id') ?? '') ?></div>
                     </div>
+                    <div class="mb-3">
+                        <label for="safety_stock" class="form-label">Estoque de segurança (unidades)</label>
+                        <input type="number" class="form-control<?= invalid_class('safety_stock') ?>" id="safety_stock" name="safety_stock" min="0" max="65535" value="<?= esc((string) $value('safety_stock'), 'attr') ?>">
+                        <div class="form-text">Vazio = usa o do fornecedor ou o global. Tem prioridade sobre os demais.</div>
+                        <div class="invalid-feedback"><?= esc(field_error('safety_stock') ?? '') ?></div>
+                    </div>
                     <div class="form-check form-switch">
                         <input type="hidden" name="active" value="0">
                         <input class="form-check-input" type="checkbox" role="switch" id="active" name="active" value="1" <?= (int) $active === 1 ? 'checked' : '' ?>>

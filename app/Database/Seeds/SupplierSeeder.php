@@ -35,7 +35,8 @@ class SupplierSeeder extends Seeder
             'status'                => 'active',
             'priority'              => 5,
             'default_shipping_days' => 1,
-            'notes'                 => 'Preços mais baixos, porém estoque reduzido.',
+            'safety_stock'          => 3,
+            'notes'                 => 'Preços mais baixos, porém estoque reduzido. Reserva de segurança maior que a global.',
         ],
         [
             'name'                  => 'Fornecedor Gamma',

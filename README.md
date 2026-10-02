@@ -15,7 +15,7 @@ O catálogo é **interno e único**: um produto (SKU interno) pode receber ofert
 - Publicar e sincronizar anúncios no Mercado Livre e, depois, em outros marketplaces.
 - Manter auditoria completa das alterações e das sincronizações.
 
-Status atual: **Fases 1 e 2 concluídas** (base, autenticação, fornecedores, catálogo, ofertas e importação CSV). Veja o [ROADMAP](ROADMAP.md).
+Status atual: **Fases 1, 2 e 3 concluídas** (base, autenticação, fornecedores, catálogo, ofertas, importação CSV e motor de seleção de fornecedores). Veja o [ROADMAP](ROADMAP.md).
 
 ## Arquitetura
 
@@ -23,6 +23,7 @@ Monólito modular em CodeIgniter 4, organizado em MVC + camada de serviços:
 
 ```
 app/
+├── Commands/          # Comandos spark (ex.: suppliers:select)
 ├── Config/            # Configurações (filtros, rotas, menu, catálogo de settings, conectores)
 ├── Controllers/       # Controllers finos: validam entrada HTTP e delegam aos services
 │   └── Api/           # API interna JSON (autenticada por sessão)
@@ -41,7 +42,7 @@ app/
 │   ├── Catalog/       # Categorias e produtos
 │   ├── Dashboard/
 │   ├── Settings/
-│   ├── Suppliers/     # Fornecedores, ofertas, importação e conectores
+│   ├── Suppliers/     # Fornecedores, ofertas, importação, conectores e motor de seleção
 │   └── Users/
 ├── Support/           # Utilitários (Decimal, Input)
 └── Views/
@@ -55,6 +56,7 @@ Decisões principais:
 - **Valores monetários em `DECIMAL`** no banco e cálculos com `bcmath` (`App\Support\Decimal`), nunca `float`.
 - **Configurações no banco** (`settings`), com catálogo tipado em `Config\SystemSettings`. Margens, estoque de segurança e pesos de ranking não ficam fixos no código.
 - **Auditoria** de toda criação, alteração e exclusão, com remoção automática de campos sensíveis (senhas, tokens, segredos).
+- **Motor de seleção separado em duas partes**: `SupplierRanker` faz só o cálculo (sem banco, testável isoladamente) e `SupplierSelectionService` carrega os dados, grava o resultado e registra as trocas.
 
 ## Stack
 
@@ -127,8 +129,9 @@ GRANT ALL PRIVILEGES ON marketplace_hub_test.* TO 'marketplace'@'localhost';
 | `suppliers` | Fornecedores |
 | `products` | Catálogo interno (SKU, EAN, dimensões, peso) |
 | `product_images` | Imagens dos produtos |
-| `supplier_offers` | Ofertas dos fornecedores (custo, estoque, frete, prazo) |
+| `supplier_offers` | Ofertas dos fornecedores (custo, estoque, frete, prazo, bloqueio manual e resultado da última avaliação) |
 | `supplier_imports` | Histórico de importações de arquivos |
+| `supplier_selection_logs` | Histórico de trocas do fornecedor principal de cada produto |
 
 ## Migrations
 
@@ -145,7 +148,7 @@ php spark migrate:refresh     # recria tudo (apaga os dados)
 php spark db:seed DevelopmentSeeder
 ```
 
-O `DevelopmentSeeder` cria configurações padrão, usuários admin e operador, categorias, 3 fornecedores, 8 produtos e ofertas de exemplo (incluindo produto sem oferta, produto sem estoque, produto inativo e oferta sem vínculo). Ele se recusa a rodar com `CI_ENVIRONMENT=production`.
+O `DevelopmentSeeder` cria configurações padrão, usuários admin e operador, categorias, 3 fornecedores, 8 produtos e ofertas de exemplo (incluindo produto sem oferta, produto sem estoque, produto inativo, oferta sem vínculo, oferta bloqueada, fornecedor e produto com estoque de segurança próprio) e já calcula a seleção de fornecedores. Ele se recusa a rodar com `CI_ENVIRONMENT=production`.
 
 Para popular só as configurações padrão (útil em produção):
 
@@ -174,15 +177,43 @@ Na tela **Importações**, baixe o modelo de CSV, preencha e envie para um forne
 - aceita valores no formato brasileiro (`1.234,56`) ou americano (`1234.56`);
 - registra erros por linha sem interromper as demais linhas.
 
+### Motor de seleção de fornecedores
+
+Para cada produto, o sistema avalia todas as ofertas vinculadas e escolhe um **fornecedor principal** e até duas **reservas**.
+
+1. **Estoque disponível** = `max(0, estoque informado − estoque de segurança)`. O estoque de segurança vem do produto; se não houver, do fornecedor; se não houver, da configuração global.
+2. **Critérios eliminatórios**: fornecedor inativo ou bloqueado, oferta inativa, oferta bloqueada manualmente (com motivo), custo inválido, estoque disponível zero, prazo de postagem não informado ou acima do limite configurado.
+3. **Score de 0 a 100** entre as ofertas elegíveis, ponderado pelos pesos de **Configurações**:
+   - preço final (custo + frete): o menor recebe 100 e os demais, proporcionalmente;
+   - estoque disponível: proporcional ao maior entre as elegíveis;
+   - prazo de postagem: 100 para o mesmo dia, caindo linearmente até o limite;
+   - confiabilidade: sincronizações com sucesso na janela configurada (alertas contam meio ponto; sem histórico = 100);
+   - prioridade do fornecedor: prioridade × 10.
+4. Empates são resolvidos por menor custo total, menor prazo, maior estoque disponível e oferta mais antiga.
+
+A seleção é recalculada automaticamente quando uma oferta é criada, alterada, excluída, bloqueada ou (des)vinculada; quando um fornecedor ou o estoque de segurança de um produto muda; após cada importação; e quando as configurações de estoque, fornecedores ou ranking são salvas. Se o principal fica inelegível, outro elegível assume na hora.
+
+Toda troca de fornecedor principal é registrada em `supplier_selection_logs` (com o motivo, a origem e o ranking completo) e na auditoria. A tela do produto mostra o score, os motivos por critério, a comparação com os demais fornecedores e o histórico de trocas. O botão **Recalcular** força um novo cálculo.
+
+O critério de margem mínima depende da precificação e entra na Fase 4.
+
 ## Cron
 
-Ainda não há tarefas agendadas nas Fases 1 e 2. A partir da Fase 8 (automação), comandos `spark` de sincronização serão executados por cron, por exemplo:
+A confiabilidade usa uma janela de tempo, então ela muda mesmo sem edições. Agende o recálculo:
 
 ```cron
-*/15 * * * * cd /caminho/marketplace-hub && php spark <comando-de-sincronizacao> >> writable/logs/cron.log 2>&1
+0 * * * * cd /caminho/marketplace-hub && php spark suppliers:select >> writable/logs/cron.log 2>&1
 ```
 
-Os comandos exatos serão documentados quando forem implementados.
+Opções do comando:
+
+```bash
+php spark suppliers:select                 # todos os produtos com ofertas
+php spark suppliers:select --product 12    # um produto
+php spark suppliers:select --supplier 3    # produtos com ofertas do fornecedor 3
+```
+
+Os comandos de sincronização com fornecedores e marketplaces chegam na Fase 8.
 
 ## Mercado Livre
 
@@ -237,9 +268,9 @@ vendor/bin/phpunit --coverage-html build/coverage   # requer Xdebug ou PCOV
 
 Suítes:
 
-- **unit**: normalização decimal, conector CSV, fábrica de conectores e limpeza de dados sensíveis na auditoria;
-- **database**: importação CSV, produtos, categorias, fornecedores/ofertas e configurações;
-- **feature**: login/logout, controle de acesso por papel, API interna e proteção CSRF.
+- **unit**: normalização decimal, conector CSV, fábrica de conectores, limpeza de dados sensíveis na auditoria e regras do ranking de fornecedores;
+- **database**: importação CSV, produtos, categorias, fornecedores/ofertas, configurações e motor de seleção (troca automática, histórico, estoque de segurança, confiabilidade);
+- **feature**: login/logout, controle de acesso por papel, API interna, proteção CSRF, tela do produto com a explicação da escolha e comando `suppliers:select`.
 
 ## Roadmap
 
@@ -247,8 +278,8 @@ Suítes:
 |---|---|---|
 | 1 | Base: estrutura, banco, layout, autenticação, configurações | Concluída |
 | 2 | Fornecedores, catálogo, ofertas, importação CSV | Concluída |
-| 3 | Motor de seleção de fornecedor | Próxima |
-| 4 | Precificação | Planejada |
+| 3 | Motor de seleção de fornecedor | Concluída |
+| 4 | Precificação | Próxima |
 | 5 | Mercado Livre: OAuth | Planejada |
 | 6 | Publicações | Planejada |
 | 7 | Pedidos | Planejada |

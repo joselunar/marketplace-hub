@@ -52,10 +52,12 @@
     </div>
 </div>
 
-<div class="card">
+<?= $this->include('products/_selection') ?>
+
+<div class="card mb-3">
     <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
         <span>Ofertas dos fornecedores</span>
-        <span class="small text-body-secondary fw-normal">Score e fornecedor selecionado serão calculados pelo motor de seleção (Fase 3).</span>
+        <span class="small text-body-secondary fw-normal">Ordenadas pela posição no ranking.</span>
     </div>
     <div class="table-responsive">
         <table class="table table-hover mb-0">
@@ -76,8 +78,11 @@
             </thead>
             <tbody>
             <?php foreach ($offers as $offer): ?>
-                <?php $days = $offer['shipping_days'] ?? $offer['default_shipping_days']; ?>
-                <tr>
+                <?php
+                $days       = $offer['shipping_days'] ?? $offer['default_shipping_days'];
+                $evaluation = $selection->find((int) $offer['id']);
+                ?>
+                <tr class="<?= $evaluation?->rank === 1 ? 'table-active-selection' : '' ?>">
                     <td>
                         <a href="<?= site_url('suppliers/' . $offer['supplier_id']) ?>" class="text-decoration-none"><?= esc($offer['supplier_name']) ?></a>
                         <?php if ($offer['supplier_status'] !== 'active'): ?>
@@ -86,13 +91,31 @@
                     </td>
                     <td class="small"><code><?= esc($offer['supplier_sku']) ?></code></td>
                     <td class="text-end text-nowrap"><?= money($offer['cost_price']) ?></td>
-                    <td class="text-center"><?= stock_badge($offer['stock_quantity']) ?></td>
+                    <td class="text-center">
+                        <?= stock_badge($offer['stock_quantity']) ?>
+                        <?php if ($evaluation !== null && (int) $offer['stock_quantity'] > 0): ?>
+                            <div class="small text-body-secondary text-nowrap" title="Estoque de segurança: <?= $evaluation->safetyStock ?> (<?= esc($evaluation->safetySourceLabel(), 'attr') ?>)"><?= $evaluation->availableStock ?> disp.</div>
+                        <?php endif ?>
+                    </td>
                     <td class="text-end text-nowrap small"><?= money($offer['shipping_cost']) ?></td>
                     <td class="text-center small"><?= $days !== null ? (int) $days . ' d' : '—' ?></td>
                     <td class="small"><?= format_datetime($offer['last_sync_at'] ?? $offer['updated_at']) ?></td>
-                    <td><?= active_badge($offer['active']) ?></td>
-                    <td class="text-center text-body-secondary">—</td>
-                    <td class="text-center text-body-secondary">—</td>
+                    <td>
+                        <?= active_badge($offer['active']) ?>
+                        <?php if ((int) $offer['blocked'] === 1): ?>
+                            <div><?= badge('Bloqueada', 'danger') ?></div>
+                        <?php endif ?>
+                    </td>
+                    <td class="text-center">
+                        <?php if ($evaluation?->isEligible()): ?>
+                            <span class="fw-semibold"><?= score_format($evaluation->score) ?></span>
+                        <?php elseif ($evaluation !== null): ?>
+                            <span class="text-body-secondary small" title="<?= esc(implode('; ', $evaluation->ineligibilityReasons), 'attr') ?>"><i class="bi bi-slash-circle"></i> <?= esc($evaluation->ineligibilityReasons[0]) ?></span>
+                        <?php else: ?>
+                            <span class="text-body-secondary">—</span>
+                        <?php endif ?>
+                    </td>
+                    <td class="text-center"><?= $evaluation !== null ? selection_position_badge($evaluation->rank) : '—' ?></td>
                     <td class="text-end text-nowrap">
                         <a href="<?= site_url('offers/' . $offer['id'] . '/edit?return_to=product') ?>" class="btn btn-sm btn-outline-secondary" title="Editar"><i class="bi bi-pencil"></i></a>
                         <form action="<?= site_url('offers/' . $offer['id'] . '/link') ?>" method="post" class="d-inline" data-confirm="Desvincular esta oferta do produto?">
@@ -111,6 +134,41 @@
             <i class="bi bi-exclamation-diamond display-6 d-block mb-2 text-warning"></i>
             Este produto ainda não possui ofertas de fornecedores.
             <div class="mt-2"><a href="<?= site_url('offers/new?product_id=' . $product['id'] . '&return_to=product') ?>" class="btn btn-sm btn-primary">Adicionar oferta</a></div>
+        </div>
+    <?php endif ?>
+</div>
+
+<div class="card">
+    <div class="card-header bg-white fw-semibold">Histórico de troca de fornecedor</div>
+    <?php if ($history === []): ?>
+        <div class="card-body small text-body-secondary">Nenhuma troca registrada.</div>
+    <?php else: ?>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>De</th>
+                    <th>Para</th>
+                    <th>Motivo</th>
+                    <th>Origem</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($history as $log): ?>
+                    <tr>
+                        <td class="small text-nowrap"><?= format_datetime($log['created_at']) ?></td>
+                        <td class="small text-nowrap"><?= esc($log['previous_supplier_name'] ?? '—') ?><?php if ($log['previous_score'] !== null): ?> <span class="text-body-secondary">(<?= score_format($log['previous_score']) ?>)</span><?php endif ?></td>
+                        <td class="small text-nowrap fw-semibold"><?= esc($log['new_supplier_name'] ?? 'Nenhum') ?><?php if ($log['new_score'] !== null): ?> <span class="text-body-secondary fw-normal">(<?= score_format($log['new_score']) ?>)</span><?php endif ?></td>
+                        <td class="small"><?= esc($log['reason']) ?></td>
+                        <td class="small text-nowrap">
+                            <?= esc(selection_trigger_label($log['trigger'])) ?>
+                            <?php if ($log['user_name']): ?><div class="text-body-secondary"><?= esc($log['user_name']) ?></div><?php endif ?>
+                        </td>
+                    </tr>
+                <?php endforeach ?>
+                </tbody>
+            </table>
         </div>
     <?php endif ?>
 </div>

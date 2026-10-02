@@ -47,9 +47,36 @@ final class ApiTest extends FeatureTestCase
 
         $payload = json_decode($this->actingAs($user)->get("api/products/{$productId}/offers")->getJSON(), true);
 
+        // Ordenadas pelo ranking: principal primeiro, inelegível por último.
         $this->assertCount(3, $payload['data']);
-        $this->assertSame('95.00', $payload['data'][0]['cost_price']);
-        $this->assertSame(1, $payload['data'][0]['stock_quantity']);
+        $this->assertSame('105.00', $payload['data'][0]['cost_price']);
+        $this->assertSame(1, $payload['data'][0]['selection_rank']);
+        $this->assertSame('95.00', $payload['data'][2]['cost_price']);
+        $this->assertNull($payload['data'][2]['selection_rank']);
+        $this->assertSame(0, $payload['data'][2]['available_stock']);
+    }
+
+    public function testReturnsSelectionExplanation(): void
+    {
+        $this->seed(DevelopmentSeeder::class);
+        $user      = $this->createUser('operator');
+        $productId = (int) $this->db->table('products')->where('sku', 'SMW-FIT-PRO')->get()->getRow()->id;
+
+        $result = $this->actingAs($user)->get("api/products/{$productId}/selection");
+
+        $result->assertOK();
+        $data = json_decode($result->getJSON(), true)['data'];
+        $this->assertSame('Fornecedor Gamma', $data['offers'][0]['supplier_name']);
+        $this->assertSame('Principal', $data['offers'][0]['position']);
+        $this->assertCount(1, $data['reserve_offer_ids']);
+        $this->assertEquals(35, $data['weights']['price']);
+        $this->assertSame(['Estoque de segurança: 1 informado, 3 reservado'], $data['offers'][2]['ineligibility_reasons']);
+        $this->assertArrayHasKey('reliability', $data['offers'][0]['criteria']);
+    }
+
+    public function testSelectionOfUnknownProductReturns404(): void
+    {
+        $this->actingAs($this->createUser('operator'))->get('api/products/999999/selection')->assertStatus(404);
     }
 
     public function testUnknownProductReturns404(): void

@@ -20,7 +20,7 @@ class ProductModel extends Model
     protected $useTimestamps = true;
     protected $allowedFields = [
         'sku', 'ean', 'name', 'slug', 'description', 'brand', 'category_id',
-        'weight', 'height', 'width', 'length', 'active',
+        'weight', 'height', 'width', 'length', 'safety_stock', 'active',
     ];
     protected $validationRules = [
         'id'          => 'permit_empty|is_natural_no_zero',
@@ -35,6 +35,7 @@ class ProductModel extends Model
         'height'      => 'permit_empty|decimal|greater_than_equal_to[0]',
         'width'       => 'permit_empty|decimal|greater_than_equal_to[0]',
         'length'      => 'permit_empty|decimal|greater_than_equal_to[0]',
+        'safety_stock' => 'permit_empty|is_natural|less_than_equal_to[65535]',
         'active'      => 'permit_empty|in_list[0,1]',
     ];
     protected $validationMessages = [
@@ -57,18 +58,21 @@ class ProductModel extends Model
             'products.*, categories.name AS category_name, '
             . 'COUNT(supplier_offers.id) AS offers_count, '
             . 'COALESCE(SUM(CASE WHEN supplier_offers.active = 1 AND suppliers.status = \'active\' THEN supplier_offers.stock_quantity ELSE 0 END), 0) AS total_stock, '
-            . 'MIN(CASE WHEN supplier_offers.active = 1 AND suppliers.status = \'active\' THEN supplier_offers.cost_price END) AS min_cost',
+            . 'MIN(CASE WHEN supplier_offers.active = 1 AND suppliers.status = \'active\' THEN supplier_offers.cost_price END) AS min_cost, '
+            . 'MAX(selected_supplier.name) AS selected_supplier_name, MAX(selected_offer.selection_score) AS selected_score',
         )
             ->join('categories', 'categories.id = products.category_id', 'left')
             ->join('supplier_offers', 'supplier_offers.product_id = products.id', 'left')
             ->join('suppliers', 'suppliers.id = supplier_offers.supplier_id', 'left')
+            ->join('supplier_offers selected_offer', 'selected_offer.id = products.selected_offer_id', 'left')
+            ->join('suppliers selected_supplier', 'selected_supplier.id = selected_offer.supplier_id', 'left')
             ->groupBy('products.id');
 
         return $this;
     }
 
     /**
-     * @param array{q?: string, sku?: string, ean?: string, brand?: string, category_id?: int|string, status?: string, supplier?: string, stock?: string} $filters
+     * @param array{q?: string, sku?: string, ean?: string, brand?: string, category_id?: int|string, status?: string, supplier?: string, selection?: string, stock?: string} $filters
      */
     public function applyFilters(array $filters): static
     {
@@ -102,6 +106,13 @@ class ProductModel extends Model
             $this->where('EXISTS (' . self::HAS_OFFER_SQL . ')', null, false);
         } elseif (($filters['supplier'] ?? '') === 'without') {
             $this->where('NOT EXISTS (' . self::HAS_OFFER_SQL . ')', null, false);
+        }
+
+        if (($filters['selection'] ?? '') === 'selected') {
+            $this->where('products.selected_offer_id IS NOT NULL', null, false);
+        } elseif (($filters['selection'] ?? '') === 'none') {
+            $this->where('products.selected_offer_id IS NULL', null, false)
+                ->where('EXISTS (' . self::HAS_OFFER_SQL . ')', null, false);
         }
 
         if (($filters['stock'] ?? '') === 'in') {

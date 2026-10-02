@@ -8,6 +8,7 @@ use App\Models\CategoryModel;
 use App\Models\ProductImageModel;
 use App\Models\ProductModel;
 use App\Services\Catalog\ProductService;
+use App\Services\Suppliers\SupplierSelectionService;
 use CodeIgniter\HTTP\RedirectResponse;
 
 class ProductController extends BaseController
@@ -21,7 +22,7 @@ class ProductController extends BaseController
 
     public function index(): string
     {
-        $filters = $this->filters(['q', 'sku', 'ean', 'brand', 'category_id', 'status', 'supplier', 'stock']);
+        $filters = $this->filters(['q', 'sku', 'ean', 'brand', 'category_id', 'status', 'supplier', 'selection', 'stock']);
         $model   = new ProductModel();
 
         $products = $model->withOfferStats()
@@ -61,6 +62,25 @@ class ProductController extends BaseController
     public function new(): string
     {
         return $this->form(null, []);
+    }
+
+    /**
+     * Recalcula a seleção de fornecedor do produto e grava o resultado.
+     */
+    public function recalculateSelection(int $id): RedirectResponse
+    {
+        try {
+            $result = service('supplierSelection')->select($id, SupplierSelectionService::TRIGGER_MANUAL, $this->auth()->id());
+        } catch (BusinessRuleException $e) {
+            return redirect()->to('/products')->with('error', $e->getMessage());
+        }
+
+        $primary = $result->primary();
+        $message = $primary === null
+            ? 'Seleção recalculada: nenhum fornecedor elegível.'
+            : sprintf('Seleção recalculada: %s é o fornecedor principal.', $primary->supplierName);
+
+        return redirect()->to("/products/{$id}")->with($primary === null ? 'warning' : 'success', $message);
     }
 
     public function create(): RedirectResponse

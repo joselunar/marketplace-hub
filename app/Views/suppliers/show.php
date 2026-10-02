@@ -66,6 +66,7 @@
                     </dd>
                     <dt>Prioridade</dt><dd><?= (int) $supplier['priority'] ?> / 10</dd>
                     <dt>Prazo padrão de postagem</dt><dd><?= $supplier['default_shipping_days'] !== null ? (int) $supplier['default_shipping_days'] . ' dia(s)' : '—' ?></dd>
+                    <dt>Estoque de segurança</dt><dd><?= $supplier['safety_stock'] !== null ? (int) $supplier['safety_stock'] . ' un.' : 'Global' ?></dd>
                     <dt>Observações</dt><dd class="text-pre-wrap"><?= nl2br(esc($supplier['notes'] ?: '—')) ?></dd>
                 </dl>
             </div>

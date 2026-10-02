@@ -9,18 +9,36 @@ use Config\Services;
 /**
  * Base para testes que usam o banco de testes (database.tests.* no .env).
  *
- * As migrations rodam do zero uma vez por execução; antes de cada teste
- * todas as tabelas são esvaziadas, o que garante isolamento sem o custo
+ * As migrations rodam do zero uma vez por execução do PHPUnit; antes de cada
+ * teste todas as tabelas são esvaziadas, o que garante isolamento sem o custo
  * de recriar o schema a cada caso.
  */
 abstract class DatabaseTestCase extends CIUnitTestCase
 {
-    use DatabaseTestTrait;
+    use DatabaseTestTrait {
+        setUpMigrate as private migrateFromScratch;
+    }
 
     protected $migrate     = true;
     protected $migrateOnce = true;
     protected $refresh     = true;
     protected $namespace   = 'App';
+
+    /**
+     * O trait do framework zera o próprio controle ao fim de cada classe
+     * (#[AfterClass]); este fica valendo para a execução inteira.
+     */
+    private static bool $schemaReady = false;
+
+    protected function setUpMigrate(): void
+    {
+        if (self::$schemaReady) {
+            return;
+        }
+
+        $this->migrateFromScratch();
+        self::$schemaReady = true;
+    }
 
     protected function setUp(): void
     {
@@ -28,7 +46,7 @@ abstract class DatabaseTestCase extends CIUnitTestCase
 
         $this->clearTables();
 
-        foreach (['auth', 'audit', 'settings'] as $service) {
+        foreach (['auth', 'audit', 'settings', 'supplierSelection'] as $service) {
             Services::resetSingle($service);
         }
     }

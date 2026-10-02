@@ -5,6 +5,7 @@ namespace App\Services\Dashboard;
 use App\Models\ProductModel;
 use App\Models\SupplierModel;
 use App\Models\SupplierOfferModel;
+use App\Models\SupplierSelectionLogModel;
 use App\Models\SyncLogModel;
 
 /**
@@ -18,6 +19,7 @@ class DashboardService
         private readonly SupplierModel $suppliers = new SupplierModel(),
         private readonly SupplierOfferModel $offers = new SupplierOfferModel(),
         private readonly SyncLogModel $syncLogs = new SyncLogModel(),
+        private readonly SupplierSelectionLogModel $selectionLogs = new SupplierSelectionLogModel(),
     ) {
     }
 
@@ -27,7 +29,13 @@ class DashboardService
             'activeProducts'       => $this->products->where('active', 1)->countAllResults(),
             'productsWithoutOffer' => $this->products->applyFilters(['status' => 'active', 'supplier' => 'without'])->countAllResults(),
             'productsOutOfStock'   => $this->products->applyFilters(['status' => 'active', 'stock' => 'out'])->countAllResults(),
+            'productsWithoutEligibleSupplier' => $this->products->applyFilters(['status' => 'active', 'selection' => 'none'])->countAllResults(),
             'activeSuppliers'      => $this->suppliers->where('status', 'active')->countAllResults(),
+            'recentSupplierChanges' => $this->selectionLogs
+                ->select('supplier_selection_logs.*, products.sku AS product_sku')
+                ->join('products', 'products.id = supplier_selection_logs.product_id')
+                ->orderBy('supplier_selection_logs.id', 'DESC')
+                ->findAll(5),
             'unlinkedOffers'       => $this->offers->where('product_id', null)->countAllResults(),
             'recentSyncErrors'     => $this->syncLogs
                 ->whereIn('status', [SyncLogModel::STATUS_ERROR, SyncLogModel::STATUS_WARNING])

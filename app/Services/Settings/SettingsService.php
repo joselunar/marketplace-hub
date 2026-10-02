@@ -80,8 +80,10 @@ class SettingsService
      * Valida e grava as configurações conhecidas recebidas do formulário.
      *
      * @param array<string, mixed> $input chave => valor
+     *
+     * @return list<string> chaves cujo valor mudou
      */
-    public function updateMany(array $input, ?int $userId = null): void
+    public function updateMany(array $input, ?int $userId = null): array
     {
         $definitions = $this->config->definitions;
         $data        = [];
@@ -117,6 +119,7 @@ class SettingsService
         }
 
         $this->guardMarginConsistency($data);
+        $this->guardRankingWeights($data, $definitions);
 
         $current = $this->all();
         $db      = $this->model->db;
@@ -129,7 +132,18 @@ class SettingsService
         $db->transComplete();
 
         $this->cache = null;
-        $this->audit()->log('update', 'settings', null, $current, $this->all(), $userId);
+        $updated     = $this->all();
+        $this->audit()->log('update', 'settings', null, $current, $updated, $userId);
+
+        $changed = [];
+
+        foreach (array_keys($definitions) as $key) {
+            if (! array_key_exists($key, $current) || $current[$key] !== $updated[$key]) {
+                $changed[] = $key;
+            }
+        }
+
+        return $changed;
     }
 
     /**
@@ -178,6 +192,26 @@ class SettingsService
         if ($desired !== null && $minimum !== null && bccomp((string) $minimum, (string) $desired, 2) > 0) {
             throw new ValidationException([
                 'pricing.minimum_margin_percentage' => 'A margem mínima não pode ser maior que a margem desejada.',
+            ]);
+        }
+    }
+
+    /**
+     * Com todos os pesos zerados o ranking não teria como diferenciar as ofertas.
+     */
+    private function guardRankingWeights(array $data, array $definitions): void
+    {
+        $total = '0';
+
+        foreach (array_keys($definitions) as $key) {
+            if (str_starts_with($key, 'ranking.weight_')) {
+                $total = bcadd($total, (string) ($data[$this->fieldName($key)] ?? '0'), 2);
+            }
+        }
+
+        if (bccomp($total, '0', 2) <= 0) {
+            throw new ValidationException([
+                'ranking.weight_price' => 'Pelo menos um peso do ranking precisa ser maior que zero.',
             ]);
         }
     }

@@ -3,7 +3,9 @@
 use App\Enums\SupplierIntegrationType;
 use App\Enums\SupplierStatus;
 use App\Enums\UserRole;
+use App\Models\MarketplaceAccountModel;
 use App\Services\Suppliers\SupplierSelectionService;
+use CodeIgniter\I18n\Time;
 
 if (! function_exists('money')) {
     /**
@@ -187,6 +189,44 @@ if (! function_exists('sync_status_badge')) {
             'processing', 'running' => badge('Sincronizando', 'info'),
             default                 => badge($status, 'secondary'),
         };
+    }
+}
+
+if (! function_exists('marketplace_account_badge')) {
+    function marketplace_account_badge(array $account): string
+    {
+        $label = MarketplaceAccountModel::STATUS_LABELS[$account['status']] ?? $account['status'];
+
+        return match (true) {
+            $account['status'] === MarketplaceAccountModel::STATUS_REAUTHORIZE  => badge($label, 'danger'),
+            $account['status'] === MarketplaceAccountModel::STATUS_DISCONNECTED => badge($label, 'secondary'),
+            ! empty($account['token_expired'])                                  => badge('Token vencido', 'warning'),
+            default                                                             => badge($label, 'success'),
+        };
+    }
+}
+
+if (! function_exists('relative_time')) {
+    /**
+     * "em 5h 10min" / "há 2 dias", em relação ao momento atual.
+     */
+    function relative_time(?string $value, string $empty = '—'): string
+    {
+        $timestamp = $value !== null && $value !== '' ? strtotime($value) : false;
+        if ($timestamp === false) {
+            return $empty;
+        }
+
+        $diff    = $timestamp - Time::now()->getTimestamp();
+        $seconds = abs($diff);
+        $text    = match (true) {
+            $seconds < 60    => 'menos de 1 min',
+            $seconds < 3600  => intdiv($seconds, 60) . ' min',
+            $seconds < 86400 => intdiv($seconds, 3600) . 'h' . (intdiv($seconds % 3600, 60) > 0 ? ' ' . intdiv($seconds % 3600, 60) . 'min' : ''),
+            default          => intdiv($seconds, 86400) . ' dia(s)',
+        };
+
+        return $diff >= 0 ? 'em ' . $text : 'há ' . $text;
     }
 }
 

@@ -4,6 +4,9 @@ namespace Config;
 
 use App\Services\Audit\AuditService;
 use App\Services\Auth\AuthService;
+use App\Services\Marketplaces\MercadoLivre\Http\CurlTransport;
+use App\Services\Marketplaces\MercadoLivre\Http\HttpTransport;
+use App\Services\Marketplaces\MercadoLivre\MercadoLivreService;
 use App\Services\Pricing\PricingService;
 use App\Services\Settings\SettingsService;
 use App\Services\Suppliers\SupplierSelectionService;
@@ -62,5 +65,26 @@ class Services extends BaseService
         }
 
         return new SupplierSelectionService();
+    }
+
+    public static function mercadoLivre(bool $getShared = true): MercadoLivreService
+    {
+        if ($getShared) {
+            return static::getSharedInstance('mercadoLivre');
+        }
+
+        return new MercadoLivreService();
+    }
+
+    /**
+     * Transporte HTTP da integração; os testes injetam um falso via Services::injectMock().
+     */
+    public static function mercadoLivreTransport(bool $getShared = true): HttpTransport
+    {
+        if ($getShared) {
+            return static::getSharedInstance('mercadoLivreTransport');
+        }
+
+        return new CurlTransport(config(MercadoLivre::class)->timeoutSeconds);
     }
 }

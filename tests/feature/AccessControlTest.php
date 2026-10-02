@@ -24,6 +24,7 @@ final class AccessControlTest extends FeatureTestCase
             'suppliers', 'suppliers/new', "suppliers/{$supplier}", "suppliers/{$supplier}/edit",
             'offers', 'offers/new', "offers/{$offer}/edit", 'offers?link=unlinked',
             'imports', 'imports/new', 'users', 'users/new', 'settings', 'logs', 'logs?tab=sync',
+            'marketplaces/mercadolivre', 'marketplaces/mercadolivre/categories',
         ];
 
         foreach ($pages as $page) {

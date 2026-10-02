@@ -7,6 +7,7 @@ use App\Models\SupplierModel;
 use App\Models\SupplierOfferModel;
 use App\Models\SupplierSelectionLogModel;
 use App\Models\SyncLogModel;
+use App\Services\Marketplaces\MarketplaceAccountService;
 
 /**
  * Indicadores do dashboard. Cada métrica é uma consulta agregada simples;
@@ -20,6 +21,7 @@ class DashboardService
         private readonly SupplierOfferModel $offers = new SupplierOfferModel(),
         private readonly SyncLogModel $syncLogs = new SyncLogModel(),
         private readonly SupplierSelectionLogModel $selectionLogs = new SupplierSelectionLogModel(),
+        private readonly MarketplaceAccountService $marketplaceAccounts = new MarketplaceAccountService(),
     ) {
     }
 
@@ -39,6 +41,7 @@ class DashboardService
                 ->orderBy('supplier_selection_logs.id', 'DESC')
                 ->findAll(5),
             'unlinkedOffers'       => $this->offers->where('product_id', null)->countAllResults(),
+            'marketplaceAccounts'  => $this->marketplaceAccounts->attentionSummary(),
             'recentSyncErrors'     => $this->syncLogs
                 ->whereIn('status', [SyncLogModel::STATUS_ERROR, SyncLogModel::STATUS_WARNING])
                 ->where('started_at >=', date('Y-m-d H:i:s', strtotime('-7 days')))

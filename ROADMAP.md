@@ -42,12 +42,16 @@
 - Endpoints `GET /api/products/{id}/pricing` e `GET /api/pricing/simulate`
 - Tarifas do marketplace como configuração (nunca fixas no código)
 
-## Fase 5 — Mercado Livre: OAuth
+## Fase 5 — Mercado Livre: OAuth ✅
 
-- Fluxo OAuth 2.0 conforme a documentação oficial
-- Armazenamento criptografado de access/refresh token e renovação automática
-- Tela de contas conectadas
-- Consulta de categorias e atributos
+- Estrutura genérica de marketplaces (`marketplaces`, `marketplace_accounts`)
+- Fluxo OAuth 2.0 (Authorization Code) conforme a documentação oficial, com `state` de uso único e PKCE S256
+- Access/refresh token cifrados em repouso, mascarados na tela e fora de logs, auditoria e API
+- Renovação automática antes do vencimento e em 401, com trava por conta por causa do refresh token de uso único
+- Contas que precisam de nova autorização marcadas como "Reconectar", com alerta no dashboard
+- Tela de contas conectadas (conectar, renovar, desconectar com revogação no Mercado Livre)
+- Explorador de categorias, atributos (obrigatórios destacados) e preditor de categoria
+- Comando `php spark meli:refresh-token` para o cron e endpoint `GET /api/marketplaces/accounts`
 
 ## Fase 6 — Publicações
 

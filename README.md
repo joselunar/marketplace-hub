@@ -15,7 +15,7 @@ O catálogo é **interno e único**: um produto (SKU interno) pode receber ofert
 - Publicar e sincronizar anúncios no Mercado Livre e, depois, em outros marketplaces.
 - Manter auditoria completa das alterações e das sincronizações.
 
-Status atual: **Fases 1 a 4 concluídas** (base, autenticação, fornecedores, catálogo, ofertas, importação CSV, motor de seleção de fornecedores e precificação). Veja o [ROADMAP](ROADMAP.md).
+Status atual: **Fases 1 a 5 concluídas** (base, autenticação, fornecedores, catálogo, ofertas, importação CSV, motor de seleção de fornecedores, precificação e conexão OAuth com o Mercado Livre). Veja o [ROADMAP](ROADMAP.md).
 
 ## Arquitetura
 
@@ -23,14 +23,14 @@ Monólito modular em CodeIgniter 4, organizado em MVC + camada de serviços:
 
 ```
 app/
-├── Commands/          # Comandos spark (ex.: suppliers:select)
+├── Commands/          # Comandos spark (suppliers:select, meli:refresh-token)
 ├── Config/            # Configurações (filtros, rotas, menu, catálogo de settings, conectores)
 ├── Controllers/       # Controllers finos: validam entrada HTTP e delegam aos services
 │   └── Api/           # API interna JSON (autenticada por sessão)
 ├── Database/
 │   ├── Migrations/    # Toda a estrutura do banco
 │   └── Seeds/         # Dados de desenvolvimento
-├── DTO/               # Objetos de transferência (fornecedores, ranking, precificação)
+├── DTO/               # Objetos de transferência (fornecedores, ranking, precificação, tokens)
 ├── Enums/             # Papéis, status e tipos de integração
 ├── Exceptions/        # ValidationException, BusinessRuleException
 ├── Filters/           # auth, guest, role, throttle de login
@@ -41,7 +41,9 @@ app/
 │   ├── Auth/
 │   ├── Catalog/       # Categorias e produtos
 │   ├── Dashboard/
+│   ├── Marketplaces/  # Contas conectadas (genérico) e MercadoLivre/ (HTTP, OAuth, tokens, categorias)
 │   ├── Pricing/       # Calculador de preço e resolução de margens
+│   ├── Security/      # Cifragem e mascaramento de tokens
 │   ├── Settings/
 │   ├── Suppliers/     # Fornecedores, ofertas, importação, conectores e motor de seleção
 │   └── Users/
@@ -59,7 +61,8 @@ Decisões principais:
 - **Auditoria** de toda criação, alteração e exclusão, com remoção automática de campos sensíveis (senhas, tokens, segredos).
 - **Motor de seleção separado em duas partes**: `SupplierRanker` faz só o cálculo (sem banco, testável isoladamente) e `SupplierSelectionService` carrega os dados, grava o resultado e registra as trocas.
 - **Precificação no mesmo padrão**: `PriceCalculator` é puro e `PricingService` resolve margens e parâmetros. O motor de seleção usa o calculador para aplicar a margem mínima a cada oferta e grava o preço do fornecedor escolhido, então seleção e preço nunca ficam dessincronizados.
-- **Tarifas de marketplace são configuração**, não código. Hoje são preenchidas em **Configurações** a partir da tabela oficial; a consulta automática à API de tarifas do Mercado Livre entra com a integração (Fase 6).
+- **Tarifas de marketplace são configuração**, não código. Hoje são preenchidas em **Configurações** a partir da tabela oficial; a consulta automática à API de tarifas do Mercado Livre entra com as publicações (Fase 6).
+- **Marketplaces genéricos**: `marketplaces` e `marketplace_accounts` não sabem nada do Mercado Livre; a integração fica em `Services/Marketplaces/MercadoLivre`, dividida em cliente HTTP, OAuth, provedor de token e categorias. O transporte HTTP é uma interface, então os testes nunca chamam a API real.
 
 ## Stack
 
@@ -135,6 +138,8 @@ GRANT ALL PRIVILEGES ON marketplace_hub_test.* TO 'marketplace'@'localhost';
 | `supplier_offers` | Ofertas dos fornecedores (custo, estoque, frete, prazo, bloqueio manual e resultado da última avaliação) |
 | `supplier_imports` | Histórico de importações de arquivos |
 | `supplier_selection_logs` | Histórico de trocas do fornecedor principal de cada produto |
+| `marketplaces` | Marketplaces conhecidos (criados a partir de `Config\Marketplaces`) |
+| `marketplace_accounts` | Contas conectadas: usuário externo, site, tokens cifrados, vencimento, status e último erro |
 
 ## Migrations
 
@@ -169,7 +174,7 @@ php spark serve --port 8080
 
 Acesse <http://localhost:8080> e entre com o e-mail e a senha definidos em `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`.
 
-Telas disponíveis: dashboard, fornecedores, categorias, produtos, ofertas, simulador de preços, importação CSV, usuários, configurações e logs (auditoria e sincronização). Os módulos das próximas fases aparecem desabilitados no menu.
+Telas disponíveis: dashboard, fornecedores, categorias, produtos, ofertas, simulador de preços, importação CSV, Mercado Livre (contas conectadas e categorias), usuários, configurações e logs (auditoria e sincronização). Os módulos das próximas fases aparecem desabilitados no menu.
 
 Em produção, aponte o servidor web para a pasta `public/`, use `CI_ENVIRONMENT=production` e `app.forceGlobalSecureRequests=true` (HTTPS).
 
@@ -220,10 +225,11 @@ A tela do produto mostra a composição completa (custo, frete, comissão, tarif
 
 ## Cron
 
-A confiabilidade usa uma janela de tempo, então ela muda mesmo sem edições. Agende o recálculo (ele também atualiza os preços gravados):
+A confiabilidade usa uma janela de tempo, então ela muda mesmo sem edições. Agende o recálculo (ele também atualiza os preços gravados) e a renovação dos tokens do Mercado Livre:
 
 ```cron
 0 * * * * cd /caminho/marketplace-hub && php spark suppliers:select >> writable/logs/cron.log 2>&1
+*/30 * * * * cd /caminho/marketplace-hub && php spark meli:refresh-token >> writable/logs/cron.log 2>&1
 ```
 
 Opções do comando:
@@ -234,19 +240,35 @@ php spark suppliers:select --product 12    # um produto
 php spark suppliers:select --supplier 3    # produtos com ofertas do fornecedor 3
 ```
 
+```bash
+php spark meli:refresh-token               # contas com token vencendo em até 30 min
+php spark meli:refresh-token --account 2   # uma conta
+php spark meli:refresh-token --force       # renova mesmo longe do vencimento
+```
+
 Os comandos de sincronização com fornecedores e marketplaces chegam na Fase 8.
 
 ## Mercado Livre
 
-A integração com o Mercado Livre começa na **Fase 5** e ainda não está implementada. Ela seguirá a documentação oficial vigente ([developers.mercadolivre.com.br](https://developers.mercadolivre.com.br/)): OAuth 2.0 com refresh token, modelo de User Products quando aplicável, publicações, pedidos e notificações (webhooks).
+A integração segue a documentação oficial ([Autenticação e Autorização](https://developers.mercadolivre.com.br/pt_br/autenticacao-e-autorizacao), [Domínios e Categorias](https://developers.mercadolivre.com.br/pt_br/categorias-e-publicacoes), [Atributos](https://developers.mercadolivre.com.br/pt_br/atributos)).
 
-Variáveis já reservadas no `.env`:
+### Configurar o aplicativo
 
-- `MELI_CLIENT_ID`
-- `MELI_CLIENT_SECRET`
-- `MELI_REDIRECT_URI`
+1. Crie um aplicativo no [portal de desenvolvedores](https://developers.mercadolivre.com.br/) e cadastre como URL de retorno o endereço `.../marketplaces/mercadolivre/callback` deste painel. Ele precisa ser idêntico ao `MELI_REDIRECT_URI`, sem parâmetros variáveis. Se o portal exigir HTTPS, use o domínio de produção ou um túnel HTTPS que encaminhe para essa rota.
+2. Preencha no `.env`: `MELI_CLIENT_ID`, `MELI_CLIENT_SECRET` e `MELI_REDIRECT_URI`. `MELI_USE_PKCE` vem ligado; desligue só se o aplicativo não aceitar PKCE.
+3. Em **Marketplaces > Mercado Livre**, um administrador clica em **Conectar conta** e autoriza com a conta **administradora** do vendedor (usuários operadores/colaboradores são recusados pelo Mercado Livre).
 
-Credenciais e tokens nunca são gravados no código nem nos logs; os tokens de acesso serão armazenados criptografados com a chave `encryption.key`.
+### Como funciona
+
+- **Autorização** (Authorization Code, server side) com `state` aleatório de uso único, válido por 10 minutos e guardado na sessão, e PKCE S256. Um retorno com `state` diferente é descartado antes de qualquer chamada à API.
+- O backend troca o `code` por tokens em `POST /oauth/token`, lê o apelido e o site da conta em `GET /users/{user_id}` e grava a conta. Reconectar o mesmo vendedor atualiza a mesma linha.
+- **Tokens cifrados** com `encryption.key` (AES-256-CTR + HMAC-SHA512). A tela mostra só o prefixo e os 4 últimos caracteres; a API interna não devolve token algum; logs e auditoria nunca recebem tokens nem o Client Secret.
+- **Renovação automática**: o access token dura 6 horas e é renovado quando faltam menos de 30 minutos, tanto antes de cada chamada à API quanto pelo comando `meli:refresh-token`. Se a API recusar um token ainda dentro do prazo (401), ele é renovado e a chamada é repetida uma vez.
+- O refresh token é **de uso único**. Para que duas renovações simultâneas (cron e uma requisição, por exemplo) não invalidem a conta, a renovação trava a linha da conta (`SELECT ... FOR UPDATE`) e confere de novo se ainda precisa renovar.
+- Erros `invalid_grant`, `unauthorized_client` e `invalid_operator_user_id` marcam a conta como **Reconectar**; falhas temporárias (rede, 5xx, 429) só registram o erro e mantêm a conta conectada. Contas para reconectar e tokens vencidos aparecem como alerta no dashboard.
+- **Desconectar** revoga a permissão do aplicativo no Mercado Livre (`DELETE /users/{user_id}/applications/{app_id}`) e apaga os tokens locais, mesmo que a revogação falhe.
+- **Categorias e atributos** (aba da mesma tela): árvore de categorias do site da conta, detalhes de publicação de cada categoria, atributos com os obrigatórios destacados e preditor de categoria pelo título do produto. As respostas ficam em cache por 6 horas.
+- Toda conexão, renovação e desconexão é registrada em `sync_logs` (aba **Sincronizações** dos logs).
 
 ## Variáveis .env
 
@@ -264,7 +286,9 @@ Credenciais e tokens nunca são gravados no código nem nos logs; os tokens de a
 | `encryption.key` | Chave de criptografia (`php spark key:generate`) |
 | `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | Usuário admin criado pelo seeder |
 | `SEED_OPERATOR_EMAIL` / `SEED_OPERATOR_PASSWORD` | Usuário operador criado pelo seeder |
-| `MELI_CLIENT_ID` / `MELI_CLIENT_SECRET` / `MELI_REDIRECT_URI` | Aplicativo do Mercado Livre (Fase 5) |
+| `MELI_CLIENT_ID` / `MELI_CLIENT_SECRET` / `MELI_REDIRECT_URI` | Aplicativo do Mercado Livre |
+| `MELI_USE_PKCE` | Envia PKCE S256 na autorização (padrão `true`) |
+| `mercadolivre.authUrl` / `mercadolivre.siteId` | Opcional: domínio de autorização e site padrão de outro país |
 
 ## Segurança
 
@@ -274,6 +298,7 @@ Credenciais e tokens nunca são gravados no código nem nos logs; os tokens de a
 - Rotas protegidas por autenticação e por papel (`admin` / `operador`).
 - Uploads validados por tamanho, extensão e MIME, salvos com nome aleatório fora de `public/` e removidos após o processamento.
 - Auditoria sem dados sensíveis.
+- Tokens de marketplace cifrados em repouso, nunca exibidos por completo e nunca enviados na URL (sempre no cabeçalho `Authorization`). Conectar, renovar e desconectar contas é restrito a administradores.
 
 ## Testes
 
@@ -289,9 +314,9 @@ vendor/bin/phpunit --coverage-html build/coverage   # requer Xdebug ou PCOV
 
 Suítes:
 
-- **unit**: normalização decimal, conector CSV, fábrica de conectores, limpeza de dados sensíveis na auditoria, regras do ranking de fornecedores (incluindo margem mínima) e calculador de preço (fórmula, tarifa fixa por faixa, arredondamento, preço manual, percentuais inviáveis);
-- **database**: importação CSV, produtos, categorias, fornecedores/ofertas, configurações, motor de seleção (troca automática, histórico, estoque de segurança, confiabilidade) e precificação (hierarquia de margens, bloqueio de preço abaixo da mínima, troca de fornecedor por margem, reprecificação por categoria);
-- **feature**: login/logout, controle de acesso por papel, API interna, proteção CSRF, tela do produto com a explicação da escolha e a composição do preço, simulador, alertas de margem e comando `suppliers:select`.
+- **unit**: normalização decimal, conector CSV, fábrica de conectores, limpeza de dados sensíveis na auditoria, regras do ranking de fornecedores (incluindo margem mínima), calculador de preço (fórmula, tarifa fixa por faixa, arredondamento, preço manual, percentuais inviáveis) e utilitários do OAuth (PKCE com o vetor da RFC 7636, cifragem e mascaramento de tokens, tradução dos erros da API);
+- **database**: importação CSV, produtos, categorias, fornecedores/ofertas, configurações, motor de seleção (troca automática, histórico, estoque de segurança, confiabilidade), precificação (hierarquia de margens, bloqueio de preço abaixo da mínima, troca de fornecedor por margem, reprecificação por categoria) e Mercado Livre (state e PKCE, troca do code, tokens cifrados, rotação do refresh token, `invalid_grant`, falha de rede, repetição em 401, revogação, categorias e cache), com transporte HTTP falso;
+- **feature**: login/logout, controle de acesso por papel, API interna, proteção CSRF, tela do produto com a explicação da escolha e a composição do preço, simulador, alertas de margem, conexão com o Mercado Livre de ponta a ponta (sem token completo na tela nem na API), explorador de categorias e comandos `suppliers:select` e `meli:refresh-token`.
 
 ## API interna
 
@@ -306,6 +331,7 @@ Rotas JSON autenticadas por sessão:
 | `GET /api/products/{id}/pricing` | Composição do preço com o fornecedor principal |
 | `GET /api/pricing/simulate` | Simulação (`cost_price`, `shipping_cost`, `extra_cost`, `category_id`, margens, `sale_price`) |
 | `GET /api/suppliers` e `GET /api/suppliers/{id}` | Fornecedores |
+| `GET /api/marketplaces/accounts` | Contas conectadas e situação do token, sem tokens (filtro `marketplace`) |
 
 ## Roadmap
 
@@ -315,8 +341,8 @@ Rotas JSON autenticadas por sessão:
 | 2 | Fornecedores, catálogo, ofertas, importação CSV | Concluída |
 | 3 | Motor de seleção de fornecedor | Concluída |
 | 4 | Precificação | Concluída |
-| 5 | Mercado Livre: OAuth | Próxima |
-| 6 | Publicações | Planejada |
+| 5 | Mercado Livre: OAuth | Concluída |
+| 6 | Publicações | Próxima |
 | 7 | Pedidos | Planejada |
 | 8 | Automação (jobs, cron, webhooks) | Planejada |
 | 9 | Outros marketplaces | Planejada |

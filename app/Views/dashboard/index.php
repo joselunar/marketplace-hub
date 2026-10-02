@@ -60,6 +60,18 @@ $cards = [
                         <a href="<?= site_url('offers?link=unlinked') ?>" class="btn btn-sm btn-outline-secondary">Vincular</a>
                     </li>
                 <?php endif ?>
+                <?php if ($summary['marketplaceAccounts']['reconnect'] > 0): ?>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-plug text-danger me-2"></i><?= $summary['marketplaceAccounts']['reconnect'] ?> conta(s) do Mercado Livre precisam ser reconectadas (autorização revogada ou expirada)</span>
+                        <a href="<?= site_url('marketplaces/mercadolivre') ?>" class="btn btn-sm btn-outline-secondary">Ver</a>
+                    </li>
+                <?php endif ?>
+                <?php if ($summary['marketplaceAccounts']['expired'] > 0): ?>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-hourglass-bottom text-warning me-2"></i><?= $summary['marketplaceAccounts']['expired'] ?> conta(s) do Mercado Livre com token vencido (confira o cron do <code>meli:refresh-token</code>)</span>
+                        <a href="<?= site_url('marketplaces/mercadolivre') ?>" class="btn btn-sm btn-outline-secondary">Ver</a>
+                    </li>
+                <?php endif ?>
                 <?php foreach ($summary['recentSyncErrors'] as $log): ?>
                     <li class="list-group-item">
                         <div class="d-flex justify-content-between">
@@ -70,7 +82,8 @@ $cards = [
                     </li>
                 <?php endforeach ?>
                 <?php if ($summary['productsWithoutOffer'] === 0 && $summary['productsWithoutEligibleSupplier'] === 0 && $summary['productsBelowMinimumMargin'] === 0
-                    && $summary['productsWithInvalidPricing'] === 0 && $summary['unlinkedOffers'] === 0 && $summary['recentSyncErrors'] === []): ?>
+                    && $summary['productsWithInvalidPricing'] === 0 && $summary['unlinkedOffers'] === 0 && $summary['recentSyncErrors'] === []
+                    && $summary['marketplaceAccounts']['reconnect'] === 0 && $summary['marketplaceAccounts']['expired'] === 0): ?>
                     <li class="list-group-item text-body-secondary small"><i class="bi bi-check-circle text-success me-1"></i> Nenhum alerta no momento.</li>
                 <?php endif ?>
             </ul>
@@ -101,7 +114,7 @@ $cards = [
             <div class="card-body small text-body-secondary">
                 <p class="mb-2">Indicadores de anúncios, pedidos, faturamento, lucro e margem serão exibidos aqui conforme os módulos forem entregues:</p>
                 <ul class="mb-0">
-                    <li>Mercado Livre: conexão OAuth, anúncios e pedidos (Fases 5 a 7)</li>
+                    <li>Mercado Livre: anúncios e pedidos (Fases 6 e 7)</li>
                     <li>Jobs de sincronização e dashboard completo (Fase 8)</li>
                 </ul>
             </div>

@@ -66,6 +66,19 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
         $routes->get('(:num)', 'SupplierImportController::show/$1');
     });
 
+    $routes->group('marketplaces/mercadolivre', static function (RouteCollection $routes): void {
+        $routes->get('/', 'MercadoLivreController::index');
+        $routes->get('categories', 'MercadoLivreCategoryController::index');
+
+        // Conectar, renovar e desconectar contas mexe em credenciais: só administradores.
+        $routes->group('', ['filter' => 'role:admin'], static function (RouteCollection $routes): void {
+            $routes->post('connect', 'MercadoLivreController::connect');
+            $routes->get('callback', 'MercadoLivreController::callback');
+            $routes->post('accounts/(:num)/refresh', 'MercadoLivreController::refresh/$1');
+            $routes->post('accounts/(:num)/disconnect', 'MercadoLivreController::disconnect/$1');
+        });
+    });
+
     // Somente administradores
     $routes->group('', ['filter' => 'role:admin'], static function (RouteCollection $routes): void {
         $routes->get('users', 'UserController::index');
@@ -91,4 +104,5 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api', 'filter' => 'auth']
     $routes->get('pricing/simulate', 'PricingController::simulate');
     $routes->get('suppliers', 'SupplierController::index');
     $routes->get('suppliers/(:num)', 'SupplierController::show/$1');
+    $routes->get('marketplaces/accounts', 'MarketplaceAccountController::index');
 });

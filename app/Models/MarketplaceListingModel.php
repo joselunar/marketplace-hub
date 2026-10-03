@@ -37,6 +37,21 @@ class MarketplaceListingModel extends Model
         self::MODEL_USER_PRODUCTS => 'User Products',
     ];
 
+    // Automação de preços (status devolvidos por /pricing-automation).
+    public const AUTOMATION_ACTIVE = 'ACTIVE';
+    public const AUTOMATION_PAUSED = 'PAUSED';
+
+    public const AUTOMATION_LABELS = [
+        self::AUTOMATION_ACTIVE => 'Ativa',
+        self::AUTOMATION_PAUSED => 'Pausada',
+    ];
+
+    public const AUTOMATION_CAUSES = [
+        'ITEM_NO_ACTIVE' => 'anúncio não está ativo',
+        'PROMO'          => 'anúncio em promoção',
+        'COMPETITORS'    => 'sem concorrentes para comparar',
+    ];
+
     protected $table         = 'marketplace_listings';
     protected $primaryKey    = 'id';
     protected $returnType    = 'array';
@@ -45,8 +60,15 @@ class MarketplaceListingModel extends Model
         'marketplace_account_id', 'product_id', 'external_listing_id', 'external_product_id', 'selling_model',
         'title', 'family_name', 'category_id', 'listing_type', 'item_condition', 'currency_id', 'price',
         'available_quantity', 'status', 'sub_status', 'permalink', 'sale_fee_percentage', 'sale_fixed_fee',
-        'sale_fee_amount', 'listing_fee_amount', 'attributes', 'last_error', 'published_by', 'published_at', 'last_sync_at',
+        'sale_fee_amount', 'listing_fee_amount', 'price_automation_status', 'price_automation_rule', 'price_automation_min',
+        'price_automation_max', 'price_automation_cause', 'price_automation_synced_at', 'attributes', 'last_error',
+        'published_by', 'published_at', 'last_sync_at',
     ];
+
+    public static function hasPriceAutomation(array $listing): bool
+    {
+        return in_array($listing['price_automation_status'] ?? null, [self::AUTOMATION_ACTIVE, self::AUTOMATION_PAUSED], true);
+    }
 
     /**
      * Anúncio com produto, conta e oferta do fornecedor principal (custo e estoque atuais).

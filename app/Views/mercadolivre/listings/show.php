@@ -11,6 +11,7 @@ use App\Models\MarketplaceListingModel;
 
 <?php
 $published = ! empty($listing['external_listing_id']);
+$automated = MarketplaceListingModel::hasPriceAutomation($listing);
 $base      = 'marketplaces/mercadolivre/listings/' . $listing['id'];
 ?>
 <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
@@ -28,7 +29,13 @@ $base      = 'marketplaces/mercadolivre/listings/' . $listing['id'];
                 <a href="<?= esc($listing['permalink'], 'attr') ?>" class="btn btn-sm btn-light" target="_blank" rel="noopener noreferrer"><i class="bi bi-box-arrow-up-right"></i> Ver no Mercado Livre</a>
             <?php endif ?>
             <form action="<?= site_url($base . '/sync') ?>" method="post"><?= csrf_field() ?><button class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Sincronizar</button></form>
-            <form action="<?= site_url($base . '/price') ?>" method="post" data-confirm="Recalcular o preço com a tarifa oficial e o fornecedor atual e enviar ao Mercado Livre?"><?= csrf_field() ?><button class="btn btn-sm btn-outline-secondary"><i class="bi bi-currency-dollar"></i> Atualizar preço</button></form>
+            <?php if ($automated): ?>
+                <form action="<?= site_url($base . '/price') ?>" method="post" data-confirm="Recalcular a faixa da automação (mínimo e máximo) com a tarifa oficial e o fornecedor atual?"><?= csrf_field() ?><button class="btn btn-sm btn-outline-secondary"><i class="bi bi-currency-dollar"></i> Atualizar faixa de preço</button></form>
+                <form action="<?= site_url($base . '/automation/disable') ?>" method="post" data-confirm="Desativar a automação de preço? O preço volta a ser enviado pelo sistema."><?= csrf_field() ?><button class="btn btn-sm btn-outline-secondary"><i class="bi bi-robot"></i> Desativar automação</button></form>
+            <?php else: ?>
+                <form action="<?= site_url($base . '/price') ?>" method="post" data-confirm="Recalcular o preço com a tarifa oficial e o fornecedor atual e enviar ao Mercado Livre?"><?= csrf_field() ?><button class="btn btn-sm btn-outline-secondary"><i class="bi bi-currency-dollar"></i> Atualizar preço</button></form>
+                <form action="<?= site_url($base . '/automation') ?>" method="post" data-confirm="Ativar a automação de preço? O Mercado Livre passa a ajustar o preço pelos concorrentes, entre o preço da margem mínima e o da margem desejada."><?= csrf_field() ?><button class="btn btn-sm btn-outline-primary"><i class="bi bi-robot"></i> Ativar automação de preço</button></form>
+            <?php endif ?>
             <form action="<?= site_url($base . '/stock') ?>" method="post" data-confirm="Enviar o estoque seguro do fornecedor principal ao Mercado Livre?"><?= csrf_field() ?><button class="btn btn-sm btn-outline-secondary"><i class="bi bi-box-seam"></i> Atualizar estoque</button></form>
             <?php if ($listing['status'] === MarketplaceListingModel::STATUS_ACTIVE): ?>
                 <form action="<?= site_url($base . '/pause') ?>" method="post" data-confirm="Pausar o anúncio <?= esc($listing['external_listing_id'], 'attr') ?>?"><?= csrf_field() ?><button class="btn btn-sm btn-outline-warning"><i class="bi bi-pause-fill"></i> Pausar</button></form>
@@ -86,6 +93,18 @@ $base      = 'marketplaces/mercadolivre/listings/' . $listing['id'];
                     <dt class="col-6">Fornecedor selecionado</dt><dd class="col-6"><?= esc($listing['supplier_name'] ?? '—') ?></dd>
                     <dt class="col-6">Preço custo (+ frete)</dt><dd class="col-6"><?= money($listing['cost_price']) ?><?= $listing['shipping_cost'] !== null ? ' + ' . money($listing['shipping_cost']) : '' ?></dd>
                     <dt class="col-6">Preço no Mercado Livre</dt><dd class="col-6 fw-semibold"><?= money($listing['price']) ?> <?= esc($listing['currency_id']) ?></dd>
+                    <dt class="col-6">Automação de preço</dt>
+                    <dd class="col-6">
+                        <?php if ($automated): ?>
+                            <?= badge(MarketplaceListingModel::AUTOMATION_LABELS[$listing['price_automation_status']], $listing['price_automation_status'] === MarketplaceListingModel::AUTOMATION_ACTIVE ? 'success' : 'warning') ?>
+                            <?= money($listing['price_automation_min']) ?> a <?= money($listing['price_automation_max']) ?>
+                            <?php if ($listing['price_automation_cause']): ?>
+                                <div class="text-body-secondary">Pausada: <?= esc(MarketplaceListingModel::AUTOMATION_CAUSES[$listing['price_automation_cause']] ?? $listing['price_automation_cause']) ?></div>
+                            <?php endif ?>
+                        <?php else: ?>
+                            Desligada
+                        <?php endif ?>
+                    </dd>
                     <dt class="col-6">Comissão / tarifa fixa</dt>
                     <dd class="col-6"><?= $listing['sale_fee_percentage'] !== null ? percent_format($listing['sale_fee_percentage'], 2) . ' + ' . money($listing['sale_fixed_fee']) : '—' ?></dd>
                     <dt class="col-6">Margem atual</dt><dd class="col-6"><?= margin_badge($listing['margin'], $listing['below_minimum'] ? 'below_minimum' : 'ok') ?></dd>

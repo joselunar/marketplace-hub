@@ -216,6 +216,14 @@ class SystemSettings extends BaseConfig
             'rules'   => 'required|is_natural|less_than_equal_to[10080]',
             'help'    => 'Busca os pedidos dos últimos 2 dias, caso alguma notificação tenha se perdido. Use 0 para desligar.',
         ],
+        'marketplace.price_automation' => [
+            'group'   => 'marketplace',
+            'type'    => 'bool',
+            'label'   => 'Automação de preços do Mercado Livre',
+            'default' => true,
+            'rules'   => 'permit_empty|in_list[0,1]',
+            'help'    => 'Ativa no anúncio a regra "Preço para ganhar no Mercado Livre": o próprio Mercado Livre acompanha os concorrentes e ajusta o preço entre o mínimo (margem mínima) e o máximo (margem desejada). Quando o custo do fornecedor muda, a faixa é recalculada.',
+        ],
         'marketplace.automatic_publish' => [
             'group'   => 'marketplace',
             'type'    => 'bool',

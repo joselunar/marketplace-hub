@@ -12,6 +12,7 @@ use App\Services\Marketplaces\MercadoLivre\MercadoLivreProductService;
 use App\Services\Marketplaces\MercadoLivre\MercadoLivreService;
 use App\Services\Suppliers\SupplierOfferService;
 use Config\MercadoLivre;
+use Config\Services;
 use Tests\Support\DatabaseTestCase;
 use Tests\Support\FakeMercadoLivreTransport;
 
@@ -32,6 +33,7 @@ final class MercadoLivreProductServiceTest extends DatabaseTestCase
     {
         parent::setUp();
         service('settings')->seedDefaults();
+        $this->setting('marketplace.price_automation', '0');
 
         $config               = new MercadoLivre();
         $config->clientId     = 'APP123';
@@ -269,6 +271,9 @@ final class MercadoLivreProductServiceTest extends DatabaseTestCase
             'id' => 'MLB4000000009', 'title' => 'Fone Bluetooth Lunar X1', 'price' => 180, 'available_quantity' => 0,
             'status' => 'paused', 'sub_status' => ['out_of_stock'], 'permalink' => 'https://produto.mercadolivre.com.br/MLB-4000000009',
         ]);
+        $this->transport->on('GET', '/pricing-automation/items/MLB4000000009/automation', 404, [
+            'error' => 'automation_not_found', 'message' => 'Automation not found for item with id [MLB4000000009]', 'status' => 404,
+        ]);
 
         $listing = $this->service->sync($listingId);
 
@@ -300,6 +305,120 @@ final class MercadoLivreProductServiceTest extends DatabaseTestCase
     public function testAutomaticPublishIsDisabledByDefault(): void
     {
         $this->assertFalse($this->service->automaticPublishEnabled());
+    }
+
+    /**
+     * Piso com a margem mínima de 10%: 100 / (1 − 0,28) = 138,89 → 138,90.
+     * Teto com a desejada de 25%: 175,90.
+     */
+    public function testPublishActivatesPriceAutomationBetweenMinimumAndDesiredPrices(): void
+    {
+        $this->setting('marketplace.price_automation', '1');
+        $this->routeSeller(['normal']);
+        $this->transport->on('POST', '/items', 201, ['id' => 'MLB4000000001', 'title' => 'Fone Bluetooth Lunar X1', 'price' => 175.9, 'available_quantity' => 8, 'status' => 'active']);
+        $this->transport->on('POST', '/items/MLB4000000001/description', 201, []);
+        $this->transport->on('GET', '/pricing-automation/items/MLB4000000001/rules', 200, ['item_id' => 'MLB4000000001', 'rules' => [['rule_id' => 'INT_EXT'], ['rule_id' => 'INT']]]);
+        $this->transport->on('POST', '/pricing-automation/items/MLB4000000001/automation', 200, [
+            'item_id' => 'MLB4000000001', 'status' => 'ACTIVE', 'item_rule' => ['rule_id' => 'INT'], 'min_price' => 138.9, 'max_price' => 175.9,
+        ]);
+
+        $listing = $this->service->publish($this->productId, ['category_id' => 'MLB196208'], '175.90', 8, null, null);
+
+        $this->assertSame([], $listing['warnings']);
+        $this->assertSame(['rule_id' => 'INT', 'min_price' => 138.9, 'max_price' => 175.9], FakeMercadoLivreTransport::json($this->transport->requestsTo('POST', '/pricing-automation/items/MLB4000000001/automation')[0]));
+
+        $row = $this->db->table('marketplace_listings')->where('id', $listing['id'])->get()->getRowArray();
+        $this->assertSame(['ACTIVE', 'INT', '138.90', '175.90'], [$row['price_automation_status'], $row['price_automation_rule'], $row['price_automation_min'], $row['price_automation_max']]);
+
+        $actions = array_column($this->db->table('marketplace_listing_events')->orderBy('id')->get()->getResultArray(), 'action');
+        $this->assertSame(['publish', 'price_automation'], $actions);
+    }
+
+    public function testPublishKeepsListingWhenAutomationIsNotAvailableYet(): void
+    {
+        $this->setting('marketplace.price_automation', '1');
+        $this->routeSeller(['normal']);
+        $this->transport->on('POST', '/items', 201, ['id' => 'MLB4000000001', 'title' => 'Fone Bluetooth Lunar X1', 'price' => 175.9, 'available_quantity' => 8, 'status' => 'active']);
+        $this->transport->on('POST', '/items/MLB4000000001/description', 201, []);
+        $this->transport->on('GET', '/pricing-automation/items/MLB4000000001/rules', 412, [
+            'error' => 'item_not_automatizable', 'message' => 'Item with id [MLB4000000001] has no rules available', 'status' => 412,
+        ]);
+
+        $listing = $this->service->publish($this->productId, ['category_id' => 'MLB196208'], '175.90', 8, null, null);
+
+        $this->assertSame('MLB4000000001', $listing['external_listing_id']);
+        $this->assertStringContainsString('Automação de preço não ativada', $listing['warnings'][0]);
+        $this->assertSame([], $this->transport->requestsTo('POST', '/pricing-automation/items/MLB4000000001/automation'));
+    }
+
+    public function testUpdatePriceOnAutomatedListingSendsRangeInsteadOfPrice(): void
+    {
+        $listingId = $this->publishedListing(['price_automation_status' => 'ACTIVE', 'price_automation_rule' => 'INT', 'price_automation_min' => '120.00', 'price_automation_max' => '175.90']);
+        $this->transport->on('PUT', '/pricing-automation/items/MLB4000000009/automation', 200, [
+            'item_id' => 'MLB4000000009', 'status' => 'ACTIVE', 'item_rule' => ['rule_id' => 'INT'], 'min_price' => 138.9, 'max_price' => 175.9,
+        ]);
+
+        $listing = $this->service->updatePrice($listingId);
+
+        $this->assertSame('138.90', $listing['price_automation_min']);
+        $this->assertSame([], $this->transport->requestsTo('PUT', '/items/MLB4000000009'), 'o preço não é enviado com automação ativa');
+        $this->assertSame(['rule_id' => 'INT', 'min_price' => 138.9, 'max_price' => 175.9], FakeMercadoLivreTransport::json($this->transport->requestsTo('PUT', '/pricing-automation/items/MLB4000000009/automation')[0]));
+
+        $this->service->updatePrice($listingId, null, true);
+        $this->assertCount(1, $this->transport->requestsTo('PUT', '/pricing-automation/items/MLB4000000009/automation'), 'faixa igual não é reenviada');
+    }
+
+    public function testPriceRejectedByAutomationSwitchesToRange(): void
+    {
+        $listingId = $this->publishedListing(['price' => '150.00']);
+        $this->transport->on('PUT', '/items/MLB4000000009', 400, [
+            'message' => 'Cannot modify price on items with dynamic pricing', 'error' => 'item.price.not_modifiable', 'status' => 400, 'cause' => [],
+        ]);
+        $this->transport->on('GET', '/pricing-automation/items/MLB4000000009/automation', 200, [
+            'item_id' => 'MLB4000000009', 'status' => 'ACTIVE', 'item_rule' => ['rule_id' => 'INT_EXT'], 'min_price' => 100, 'max_price' => 200,
+        ]);
+        $this->transport->on('PUT', '/pricing-automation/items/MLB4000000009/automation', 200, [
+            'item_id' => 'MLB4000000009', 'status' => 'ACTIVE', 'item_rule' => ['rule_id' => 'INT_EXT'], 'min_price' => 138.9, 'max_price' => 175.9,
+        ]);
+
+        $listing = $this->service->updatePrice($listingId);
+
+        $this->assertSame(['ACTIVE', 'INT_EXT', '138.90', '175.90'], [$listing['price_automation_status'], $listing['price_automation_rule'], $listing['price_automation_min'], $listing['price_automation_max']]);
+        $this->assertSame('INT_EXT', FakeMercadoLivreTransport::json($this->transport->requestsTo('PUT', '/pricing-automation/items/MLB4000000009/automation')[0])['rule_id'], 'mantém a regra escolhida pelo vendedor');
+    }
+
+    public function testAutomaticCheckFallsBackToPriceWhenAutomationIsUnavailable(): void
+    {
+        $this->setting('marketplace.price_automation', '1');
+        $listingId = $this->publishedListing(['price' => '150.00']);
+        $this->transport->on('GET', '/pricing-automation/items/MLB4000000009/rules', 412, [
+            'error' => 'item_not_automatizable', 'message' => 'Item with id [MLB4000000009] has no rules available', 'status' => 412,
+        ]);
+        $this->transport->on('PUT', '/items/MLB4000000009', 200, ['id' => 'MLB4000000009', 'price' => 175.9, 'status' => 'active']);
+
+        $listing = $this->service->updatePrice($listingId, null, true);
+
+        $this->assertSame('175.90', $listing['price']);
+        $this->assertNull($listing['price_automation_status']);
+        $this->assertSame(['update_price'], array_column($this->db->table('marketplace_listing_events')->get()->getResultArray(), 'action'), 'tentativa automática sem automação não polui o histórico');
+    }
+
+    public function testDisableRemovesAutomation(): void
+    {
+        $listingId = $this->publishedListing(['price_automation_status' => 'PAUSED', 'price_automation_rule' => 'INT', 'price_automation_min' => '138.90', 'price_automation_max' => '175.90', 'price_automation_cause' => 'PROMO']);
+        $this->transport->on('DELETE', '/pricing-automation/items/MLB4000000009/automation', 200, []);
+
+        $listing = $this->service->automation()->disable($listingId);
+
+        $this->assertNull($listing['price_automation_status']);
+        $this->assertNull($listing['price_automation_min']);
+        $this->assertCount(1, $this->transport->requestsTo('DELETE', '/pricing-automation/items/MLB4000000009/automation'));
+    }
+
+    private function setting(string $key, string $value): void
+    {
+        $this->db->table('settings')->where('key', $key)->update(['value' => $value]);
+        Services::resetSingle('settings');
     }
 
     private function publishedListing(array $overrides = []): int

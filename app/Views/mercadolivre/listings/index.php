@@ -91,7 +91,12 @@ use App\Models\MarketplaceListingModel;
                             </td>
                             <td><?= esc($listing['supplier_name'] ?? '—') ?></td>
                             <td class="text-end text-nowrap"><?= money($listing['cost_price']) ?></td>
-                            <td class="text-end text-nowrap fw-semibold"><?= money($listing['price']) ?></td>
+                            <td class="text-end text-nowrap fw-semibold">
+                                <?php if (MarketplaceListingModel::hasPriceAutomation($listing)): ?>
+                                    <i class="bi bi-robot text-primary" title="Automação de preço: <?= esc(money($listing['price_automation_min']) . ' a ' . money($listing['price_automation_max']), 'attr') ?>"></i>
+                                <?php endif ?>
+                                <?= money($listing['price']) ?>
+                            </td>
                             <td class="text-end"><?= margin_badge($listing['margin'], $listing['below_minimum'] ? 'below_minimum' : 'ok') ?></td>
                             <td class="text-center">
                                 <?= (int) $listing['available_quantity'] ?>

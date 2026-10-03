@@ -352,6 +352,45 @@ class MercadoLivreListingPreviewService
     }
 
     /**
+     * Faixa da automação de preços: o piso entrega a margem mínima e o teto
+     * a desejada, ambos com a tarifa oficial do próprio preço.
+     *
+     * @return array{min: PriceBreakdown, max: PriceBreakdown, fee: ?ListingFee}
+     *
+     * @throws BusinessRuleException quando não há faixa possível
+     */
+    public function automationRange(array $product, array $account, OfferEvaluation $offer, string $categoryId, string $listingTypeId, string $currencyId): array
+    {
+        $pricing = $this->pricing ?? service('pricing');
+        $context = $pricing->contextFor($product, $pricing->config(MercadoLivreAuthService::SLUG));
+
+        if ($context->hasManualPrice()) {
+            throw new BusinessRuleException('O produto tem preço de venda manual. Remova o preço manual para o Mercado Livre ajustar o preço automaticamente.');
+        }
+
+        [$fee, $max, $error] = $this->officialPrice($product, $account, $offer, $categoryId, $listingTypeId, $currencyId);
+        if ($error !== null || $max === null) {
+            throw new BusinessRuleException($error ?? 'Não foi possível calcular o preço máximo.');
+        }
+
+        try {
+            $min = $this->fees->minimumPrice($account, $categoryId, $listingTypeId, $currencyId, new CostInput($offer->costPrice, $offer->shippingCost, $context->productExtraCost), $context)['breakdown'];
+        } catch (PricingException $e) {
+            throw new BusinessRuleException('Com a tarifa oficial não existe preço mínimo que cubra os custos: ' . $e->getMessage(), 0, $e);
+        } catch (MercadoLivreApiException $e) {
+            throw new BusinessRuleException('Não foi possível consultar a tarifa no Mercado Livre: ' . $e->userMessage(), 0, $e);
+        } catch (UnexpectedValueException $e) {
+            throw new BusinessRuleException($e->getMessage(), 0, $e);
+        }
+
+        if (bccomp($min->price, $max->price, 2) > 0) {
+            throw new BusinessRuleException('O preço mínimo calculado ficou acima do máximo. Revise as margens do produto.');
+        }
+
+        return ['min' => $min, 'max' => $max, 'fee' => $fee];
+    }
+
+    /**
      * @return list<string>
      */
     private function existingListingErrors(?array $existing): array

@@ -12,6 +12,7 @@ class MarketplaceListingEventModel extends Model
     public const ACTION_UPDATE_STOCK = 'update_stock';
     public const ACTION_PAUSE        = 'pause';
     public const ACTION_ACTIVATE     = 'activate';
+    public const ACTION_AUTOMATION   = 'price_automation';
 
     public const ACTION_LABELS = [
         self::ACTION_PUBLISH      => 'Publicação',
@@ -20,6 +21,7 @@ class MarketplaceListingEventModel extends Model
         self::ACTION_UPDATE_STOCK => 'Atualização de estoque',
         self::ACTION_PAUSE        => 'Pausa',
         self::ACTION_ACTIVATE     => 'Reativação',
+        self::ACTION_AUTOMATION   => 'Automação de preço',
     ];
 
     public const STATUS_SUCCESS = 'success';

@@ -94,3 +94,9 @@
 - Tela **Marketplaces** (situação da integração, variáveis que faltam, contas, anúncios ativos, capacidades e tarifas) e endpoint `GET /api/marketplaces`
 - Pedidos com importação e atualização pelo adaptador da conta, telas e mensagens sem referência fixa ao Mercado Livre
 - Guia "Adicionando um marketplace" no README; Shopee, Amazon e Magalu entram por adaptadores escritos a partir da documentação oficial de cada um, quando houver credenciais de parceiro
+
+## Fase 10 — Preço competitivo ✅
+
+- Automação de preços oficial do Mercado Livre (regra "Preço para ganhar") ativada na publicação, com faixa entre o preço da margem mínima e o da margem desejada, calculados com a tarifa oficial
+- Faixa recalculada quando custo, fornecedor ou tarifa mudam; preço nunca enviado a anúncio automatizado (`item.price.not_modifiable`)
+- Situação da automação (ativa, pausada e motivo) na tela do anúncio, com ativar e desativar

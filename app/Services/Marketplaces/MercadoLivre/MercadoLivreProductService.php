@@ -38,6 +38,7 @@ class MercadoLivreProductService
 
     private readonly MercadoLivreService $meli;
     private readonly MercadoLivreListingPreviewService $previews;
+    private readonly MercadoLivrePriceAutomationService $automation;
 
     public function __construct(
         ?MercadoLivreService $meli = null,
@@ -51,14 +52,21 @@ class MercadoLivreProductService
         private readonly ProductModel $products = new ProductModel(),
         private readonly MarketplaceCategoryMappingModel $mappings = new MarketplaceCategoryMappingModel(),
         private readonly SyncLogModel $syncLogs = new SyncLogModel(),
+        ?MercadoLivrePriceAutomationService $automation = null,
     ) {
-        $this->meli     = $meli ?? service('mercadoLivre');
-        $this->previews = $previews ?? new MercadoLivreListingPreviewService($this->meli, selection: $this->selection, pricing: $this->pricing);
+        $this->meli       = $meli ?? service('mercadoLivre');
+        $this->previews   = $previews ?? new MercadoLivreListingPreviewService($this->meli, selection: $this->selection, pricing: $this->pricing);
+        $this->automation = $automation ?? new MercadoLivrePriceAutomationService($this->meli, $this->previews, $this->selection, $this->settings, $this->audit, $this->listings, $this->events, $this->products);
     }
 
     public function previews(): MercadoLivreListingPreviewService
     {
         return $this->previews;
+    }
+
+    public function automation(): MercadoLivrePriceAutomationService
+    {
+        return $this->automation;
     }
 
     /**
@@ -146,6 +154,14 @@ class MercadoLivreProductService
         $this->syncLog($accountId, 'listing_publish', SyncLogModel::STATUS_SUCCESS, $message, $startedAt, ['listing_id' => $listingId, 'product_id' => $productId]);
         $this->audit()->log('publish', 'marketplace_listing', $listingId, null, ['external_listing_id' => $externalId, 'product_id' => $productId, 'price' => $preview->price(), 'available_quantity' => $preview->quantity], $userId);
 
+        if ($this->automation->enabled()) {
+            try {
+                $this->automation->enable($listingId, $userId);
+            } catch (BusinessRuleException $e) {
+                $warnings[] = 'Automação de preço não ativada: ' . $e->getMessage() . ' A conferência automática de preço tenta de novo.';
+            }
+        }
+
         return $this->findOrFail($listingId) + ['warnings' => $warnings];
     }
 
@@ -166,7 +182,23 @@ class MercadoLivreProductService
         $changes = $this->diff($listing, $data, ['title', 'price', 'available_quantity', 'status', 'sub_status', 'external_product_id']);
         $this->listings->update($listingId, $data);
 
-        $this->event($listingId, Events::ACTION_SYNC, Events::STATUS_SUCCESS, $changes === [] ? 'Sem alterações.' : 'Dados atualizados a partir do Mercado Livre.', array_intersect_key($listing, $changes), $changes, $userId);
+        $warning = null;
+        try {
+            $automation = $this->automation->pull($listing);
+            $changes += $this->diff($listing, $automation, ['price_automation_status', 'price_automation_min', 'price_automation_max', 'price_automation_cause']);
+        } catch (MercadoLivreApiException $e) {
+            $warning = ' Não foi possível ler a automação de preço: ' . $e->userMessage();
+        }
+
+        $this->event(
+            $listingId,
+            Events::ACTION_SYNC,
+            $warning === null ? Events::STATUS_SUCCESS : Events::STATUS_WARNING,
+            ($changes === [] ? 'Sem alterações.' : 'Dados atualizados a partir do Mercado Livre.') . ($warning ?? ''),
+            array_intersect_key($listing, $changes),
+            $changes,
+            $userId,
+        );
 
         return $this->findOrFail($listingId);
     }
@@ -174,11 +206,28 @@ class MercadoLivreProductService
     /**
      * Recalcula o preço com a tarifa oficial e o fornecedor principal atual e envia ao anúncio.
      *
+     * Com automação de preço o Mercado Livre não aceita o preço; o que se
+     * atualiza é a faixa da automação. Na conferência automática, anúncios
+     * ainda sem automação tentam ativá-la (com a configuração ligada).
+     *
      * @param bool $skipUnchanged não registra evento quando o preço já está correto (conferência automática)
      */
     public function updatePrice(int $listingId, ?int $userId = null, bool $skipUnchanged = false): array
     {
         $listing = $this->publishedOrFail($listingId);
+
+        if (Listings::hasPriceAutomation($listing)) {
+            return $this->automation->refresh($listingId, $userId, $skipUnchanged);
+        }
+
+        if ($skipUnchanged && $this->automation->enabled() && $listing['status'] === Listings::STATUS_ACTIVE) {
+            try {
+                return $this->automation->enable($listingId, $userId, quiet: true);
+            } catch (BusinessRuleException) {
+                // Anúncio ainda sem automação disponível: segue enviando o preço calculado.
+            }
+        }
+
         $product = $this->productOf($listing);
         $offer   = ($this->selection ?? service('supplierSelection'))->evaluate((int) $product['id'])->primary();
 
@@ -207,6 +256,12 @@ class MercadoLivreProductService
         try {
             $item = $this->meli->put((int) $listing['marketplace_account_id'], '/items/' . rawurlencode($listing['external_listing_id']), ['price' => (float) $breakdown->price]);
         } catch (MercadoLivreApiException $e) {
+            if ($e->errorCode === 'item.price.not_modifiable') {
+                // Automação ligada direto no Mercado Livre: passa a ajustar a faixa dela.
+                $this->automation->pull($listing);
+
+                return $this->automation->refresh($listingId, $userId);
+            }
             $this->fail($listing, Events::ACTION_UPDATE_PRICE, $e, $userId);
         }
 

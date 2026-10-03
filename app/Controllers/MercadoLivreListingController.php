@@ -131,6 +131,16 @@ class MercadoLivreListingController extends BaseController
         return $this->action($id, fn (int $userId) => $this->products()->updateStock($id, $userId), 'Estoque enviado ao Mercado Livre.');
     }
 
+    public function enableAutomation(int $id): RedirectResponse
+    {
+        return $this->action($id, fn (int $userId) => $this->products()->automation()->enable($id, $userId), 'Automação de preço ativada no Mercado Livre.');
+    }
+
+    public function disableAutomation(int $id): RedirectResponse
+    {
+        return $this->action($id, fn (int $userId) => $this->products()->automation()->disable($id, $userId), 'Automação de preço desativada.');
+    }
+
     public function pause(int $id): RedirectResponse
     {
         return $this->action($id, fn (int $userId) => $this->products()->pause($id, $userId), 'Anúncio pausado.');

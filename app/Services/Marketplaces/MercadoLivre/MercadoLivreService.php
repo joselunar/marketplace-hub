@@ -112,6 +112,11 @@ class MercadoLivreService
         return $this->withToken($accountId, fn (string $token): array => $this->api->put($path, $token, $body));
     }
 
+    public function delete(int $accountId, string $path): array
+    {
+        return $this->withToken($accountId, fn (string $token): array => $this->api->delete($path, $token));
+    }
+
     /**
      * Tags do vendedor (GET /users/{user_id}). "user_product_seller" indica
      * que a conta já publica no modelo User Products.

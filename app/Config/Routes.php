@@ -100,6 +100,8 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
             $routes->post('(:num)/sync', 'MercadoLivreListingController::sync/$1');
             $routes->post('(:num)/price', 'MercadoLivreListingController::updatePrice/$1');
             $routes->post('(:num)/stock', 'MercadoLivreListingController::updateStock/$1');
+            $routes->post('(:num)/automation', 'MercadoLivreListingController::enableAutomation/$1');
+            $routes->post('(:num)/automation/disable', 'MercadoLivreListingController::disableAutomation/$1');
             $routes->post('(:num)/pause', 'MercadoLivreListingController::pause/$1');
             $routes->post('(:num)/activate', 'MercadoLivreListingController::activate/$1');
         });

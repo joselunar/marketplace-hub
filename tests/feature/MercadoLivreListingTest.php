@@ -71,6 +71,7 @@ final class MercadoLivreListingTest extends FeatureTestCase
         $result->assertRedirectTo(site_url('marketplaces/mercadolivre/listings/' . $listing['id']));
         $result->assertSessionHas('success', 'Anúncio MLB4000000001 publicado no Mercado Livre.');
         $this->assertSame('MLB4000000001', $listing['external_listing_id']);
+        $this->assertSame(['ACTIVE', '138.90', '175.90'], [$listing['price_automation_status'], $listing['price_automation_min'], $listing['price_automation_max']], 'automação de preço ligada por padrão');
 
         $index = $this->actingAs($user)->get('marketplaces/mercadolivre/listings');
         $index->assertOK();
@@ -152,6 +153,8 @@ final class MercadoLivreListingTest extends FeatureTestCase
                 'listing_type_id' => 'gold_special', 'listing_type_name' => 'Clássico', 'currency_id' => 'BRL', 'listing_fee_amount' => 0,
                 'requires_picture' => true, 'sale_fee_amount' => 21.11, 'sale_fee_details' => ['fixed_fee' => 0, 'percentage_fee' => 12],
             ]])
-            ->on('POST', '/items', 201, ['id' => 'MLB4000000001', 'title' => 'Fone Bluetooth Lunar X1', 'price' => 175.9, 'available_quantity' => 8, 'status' => 'active', 'permalink' => 'https://produto.mercadolivre.com.br/MLB-4000000001']);
+            ->on('POST', '/items', 201, ['id' => 'MLB4000000001', 'title' => 'Fone Bluetooth Lunar X1', 'price' => 175.9, 'available_quantity' => 8, 'status' => 'active', 'permalink' => 'https://produto.mercadolivre.com.br/MLB-4000000001'])
+            ->on('GET', '/pricing-automation/items/MLB4000000001/rules', 200, ['item_id' => 'MLB4000000001', 'rules' => [['rule_id' => 'INT']]])
+            ->on('POST', '/pricing-automation/items/MLB4000000001/automation', 200, ['item_id' => 'MLB4000000001', 'status' => 'ACTIVE', 'item_rule' => ['rule_id' => 'INT'], 'min_price' => 138.9, 'max_price' => 175.9]);
     }
 }

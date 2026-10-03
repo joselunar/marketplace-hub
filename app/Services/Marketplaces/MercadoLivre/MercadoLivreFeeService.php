@@ -4,6 +4,7 @@ namespace App\Services\Marketplaces\MercadoLivre;
 
 use App\DTO\MercadoLivre\ListingFee;
 use App\DTO\Pricing\CostInput;
+use App\DTO\Pricing\MarginPolicy;
 use App\DTO\Pricing\PriceBreakdown;
 use App\DTO\Pricing\PricingContext;
 use App\Services\Pricing\PriceCalculator;
@@ -150,6 +151,34 @@ class MercadoLivreFeeService
         $fee = $this->quote($account, $categoryId, $listingTypeId, $seen[0], $currencyId);
 
         return ['breakdown' => $this->breakdownAt($seen[0], $fee, $costs, $context), 'fee' => $fee];
+    }
+
+    /**
+     * Menor preço que ainda entrega a margem mínima, com a tarifa oficial
+     * consultada para esse mesmo preço. Usado como piso da automação de preços.
+     *
+     * @return array{breakdown: PriceBreakdown, fee: ListingFee}
+     *
+     * @throws PricingException
+     */
+    public function minimumPrice(
+        array $account,
+        string $categoryId,
+        string $listingTypeId,
+        string $currencyId,
+        CostInput $costs,
+        PricingContext $context,
+    ): array {
+        $margins = $context->margins;
+        $floor   = new PricingContext(
+            $context->config,
+            new MarginPolicy($margins->minimum, $margins->minimumSource, $margins->minimum, $margins->minimumSource, $margins->minimumCategory, $margins->minimumCategory),
+            null,
+            $context->productExtraCost,
+        );
+        $start = $this->calculator->suggest($costs, $floor->margins, $floor->config)->price;
+
+        return $this->price($account, $categoryId, $listingTypeId, $currencyId, $costs, $floor, $start);
     }
 
     /**

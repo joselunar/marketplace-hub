@@ -136,6 +136,7 @@ final class ListingAutoSyncTest extends DatabaseTestCase
             'sale_fee_details' => ['financing_add_on_fee' => 0, 'fixed_fee' => 0, 'gross_amount' => 21.11, 'meli_percentage_fee' => 0, 'percentage_fee' => 12],
         ]]);
         $this->transport->on('PUT', '/items/MLB1', 200, ['id' => 'MLB1', 'price' => 175.9, 'status' => 'active']);
+        $this->transport->on('GET', '/pricing-automation/items/MLB1/rules', 412, ['error' => 'item_not_automatizable', 'message' => 'Item with id [MLB1] has no rules available', 'status' => 412]);
         $queue = new JobQueue();
 
         $queue->enqueue(SyncListingPriceJob::TYPE, ['listing_id' => $listingId]);

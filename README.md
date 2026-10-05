@@ -369,7 +369,7 @@ A publicação segue [Publicar produtos](https://developers.mercadolivre.com.br/
 
 ### Notificações
 
-Seguem [Notificações](https://developers.mercadolivre.com.br/pt_br/produto-receba-notificacoes). No aplicativo do Mercado Livre, cadastre `https://seu-dominio/webhooks/mercadolivre` como URL de notificações e assine os tópicos `orders_v2` e `items`.
+Seguem [Notificações](https://developers.mercadolivre.com.br/pt_br/produto-receba-notificacoes). No aplicativo do Mercado Livre, cadastre `https://seu-dominio/webhooks/ml` como URL de notificações e assine os tópicos `orders_v2` e `items`. O DevCenter recusa URLs com "mercadolivre" no endereço; a rota antiga `/webhooks/mercadolivre` continua ativa para aplicativos já cadastrados.
 
 - O Mercado Livre exige HTTP 200 em até 500 ms. Por isso o endpoint só **valida e grava** a notificação em `webhook_events`; o pedido ou anúncio é consultado depois, pelo agendador (a cada minuto), por `meli:process-notifications` ou pelo botão **Processar fila** na aba **Notificações**.
 - Validação: corpo JSON de até 16 KB, `topic`, `resource` e `user_id` obrigatórios, `application_id` igual ao `MELI_CLIENT_ID` quando ele está configurado (senão 403) e, opcionalmente, IP de origem na lista `MELI_WEBHOOK_IPS` (a documentação publica os IPs de envio). A rota fica fora do CSRF e da sessão e tem limite de requisições por IP.

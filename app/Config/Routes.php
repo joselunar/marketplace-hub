@@ -141,6 +141,8 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
 
 // Notificações dos marketplaces (públicas; validadas no controller/service)
 $routes->post('webhooks/mercadolivre', 'WebhookController::mercadolivre', ['filter' => 'webhookthrottle']);
+// O DevCenter não aceita mais URLs de notificação contendo "mercadolivre".
+$routes->post('webhooks/ml', 'WebhookController::mercadolivre', ['filter' => 'webhookthrottle']);
 
 // API interna (JSON, sessão autenticada)
 $routes->group('api', ['namespace' => 'App\Controllers\Api', 'filter' => 'auth'], static function (RouteCollection $routes): void {

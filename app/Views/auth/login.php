@@ -2,8 +2,8 @@
 
 <?= $this->section('content') ?>
 <div class="text-center mb-4">
-    <i class="bi bi-hexagon-fill text-primary display-5"></i>
-    <h1 class="h4 mt-2 mb-0">Marketplace Hub</h1>
+    <img src="<?= base_url('assets/brand/logo-mark.svg') ?>" alt="" width="56" height="56" class="auth-logo">
+    <h1 class="h4 mt-2 mb-0">Vitrine Hub</h1>
     <p class="text-body-secondary small">Acesso administrativo</p>
 </div>
 

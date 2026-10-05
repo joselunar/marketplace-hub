@@ -15,7 +15,7 @@ use Throwable;
  */
 class SyncSuppliers extends BaseCommand
 {
-    protected $group       = 'Marketplace Hub';
+    protected $group       = 'Vitrine Hub';
     protected $name        = 'suppliers:sync';
     protected $description = 'Sincroniza estoque e custos dos fornecedores com adapter de integração.';
     protected $usage       = 'suppliers:sync [--supplier <id>] [--only stock|prices] [--queue]';

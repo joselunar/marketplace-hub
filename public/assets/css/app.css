@@ -205,6 +205,11 @@ body.app {
     background: linear-gradient(135deg, #111827 0%, #1e3a8a 100%);
 }
 
+.auth-logo {
+    border-radius: 14px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+}
+
 .auth-page .text-center h1,
 .auth-page .text-center p {
     color: #fff !important;

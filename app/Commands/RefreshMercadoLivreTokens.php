@@ -15,7 +15,7 @@ use CodeIgniter\I18n\Time;
  */
 class RefreshMercadoLivreTokens extends BaseCommand
 {
-    protected $group       = 'Marketplace Hub';
+    protected $group       = 'Vitrine Hub';
     protected $name        = 'meli:refresh-token';
     protected $description = 'Renova os access tokens do Mercado Livre próximos do vencimento.';
     protected $usage       = 'meli:refresh-token [--account <id>] [--force]';

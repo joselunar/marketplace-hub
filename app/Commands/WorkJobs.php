@@ -12,7 +12,7 @@ use CodeIgniter\CLI\CLI;
  */
 class WorkJobs extends BaseCommand
 {
-    protected $group       = 'Marketplace Hub';
+    protected $group       = 'Vitrine Hub';
     protected $name        = 'jobs:work';
     protected $description = 'Executa os jobs pendentes da fila (com novas tentativas para falhas temporárias).';
     protected $usage       = 'jobs:work [--max-jobs <n>] [--max-time <segundos>]';

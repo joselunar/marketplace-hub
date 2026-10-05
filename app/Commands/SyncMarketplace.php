@@ -14,7 +14,7 @@ use CodeIgniter\CLI\CLI;
  */
 class SyncMarketplace extends BaseCommand
 {
-    protected $group       = 'Marketplace Hub';
+    protected $group       = 'Vitrine Hub';
     protected $name        = 'marketplace:sync';
     protected $description = 'Enfileira agora tokens, notificações, pedidos, estoque e preço dos anúncios e processa a fila.';
     protected $usage       = 'marketplace:sync [--no-work]';

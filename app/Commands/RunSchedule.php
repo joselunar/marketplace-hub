@@ -12,7 +12,7 @@ use CodeIgniter\CLI\CLI;
  */
 class RunSchedule extends BaseCommand
 {
-    protected $group       = 'Marketplace Hub';
+    protected $group       = 'Vitrine Hub';
     protected $name        = 'schedule:run';
     protected $description = 'Enfileira os jobs das tarefas agendadas que estão vencidas.';
     protected $usage       = 'schedule:run';

@@ -14,7 +14,7 @@ class SyncMercadoLivrePrices extends BaseCommand
 {
     use SyncsListings;
 
-    protected $group       = 'Marketplace Hub';
+    protected $group       = 'Vitrine Hub';
     protected $name        = 'meli:sync-prices';
     protected $description = 'Recalcula com a tarifa oficial e envia o preço dos anúncios de produtos com preço válido.';
     protected $usage       = 'meli:sync-prices [--listing <id>] [--force] [--queue]';

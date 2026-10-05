@@ -11,7 +11,7 @@ use CodeIgniter\CLI\CLI;
  */
 class ProcessMercadoLivreNotifications extends BaseCommand
 {
-    protected $group       = 'Marketplace Hub';
+    protected $group       = 'Vitrine Hub';
     protected $name        = 'meli:process-notifications';
     protected $description = 'Processa as notificações do Mercado Livre que estão na fila.';
     protected $usage       = 'meli:process-notifications [--limit <n>]';

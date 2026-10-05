@@ -1,4 +1,4 @@
-# Marketplace Hub
+# Vitrine Hub
 
 ## Descrição
 

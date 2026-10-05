@@ -13,7 +13,7 @@ class SyncMercadoLivreStock extends BaseCommand
 {
     use SyncsListings;
 
-    protected $group       = 'Marketplace Hub';
+    protected $group       = 'Vitrine Hub';
     protected $name        = 'meli:sync-stock';
     protected $description = 'Envia o estoque do fornecedor principal aos anúncios que estão com quantidade diferente.';
     protected $usage       = 'meli:sync-stock [--listing <id>] [--force] [--queue]';

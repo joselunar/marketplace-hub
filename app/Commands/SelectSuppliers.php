@@ -13,7 +13,7 @@ use CodeIgniter\CLI\CLI;
  */
 class SelectSuppliers extends BaseCommand
 {
-    protected $group       = 'Marketplace Hub';
+    protected $group       = 'Vitrine Hub';
     protected $name        = 'suppliers:select';
     protected $description = 'Recalcula o fornecedor principal, as reservas e o preço dos produtos.';
     protected $usage       = 'suppliers:select [--product <id>] [--supplier <id>]';

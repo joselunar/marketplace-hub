@@ -14,7 +14,7 @@ use CodeIgniter\CLI\CLI;
  */
 class ImportMercadoLivreOrders extends BaseCommand
 {
-    protected $group       = 'Marketplace Hub';
+    protected $group       = 'Vitrine Hub';
     protected $name        = 'meli:import-orders';
     protected $description = 'Importa os pedidos recentes das contas conectadas do Mercado Livre.';
     protected $usage       = 'meli:import-orders [--days <n>] [--account <id>]';

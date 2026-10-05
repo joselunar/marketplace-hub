@@ -6,7 +6,9 @@
     <meta name="csrf-token-name" content="<?= esc(csrf_token(), 'attr') ?>">
     <meta name="csrf-token-hash" content="<?= esc(csrf_hash(), 'attr') ?>">
     <meta name="csrf-header" content="<?= esc(csrf_header(), 'attr') ?>">
-    <title><?= esc($title ?? 'Painel') ?> · Marketplace Hub</title>
+    <title><?= esc($title ?? 'Painel') ?> · Vitrine Hub</title>
+    <meta name="theme-color" content="#1e40af">
+    <link rel="icon" type="image/svg+xml" href="<?= base_url('assets/brand/logo-mark.svg') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/vendor/bootstrap/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/app.css') ?>">

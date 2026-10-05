@@ -1,2 +1,6 @@
 User-agent: *
-Disallow: 
+Allow: /$
+Allow: /trocas-e-devolucoes
+Allow: /privacidade
+Allow: /assets/
+Disallow: /

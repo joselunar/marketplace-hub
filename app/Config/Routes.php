@@ -3,7 +3,10 @@
 use CodeIgniter\Router\RouteCollection;
 
 /** @var RouteCollection $routes */
-$routes->get('/', static fn () => redirect()->to('/dashboard'));
+// Site institucional da loja (público)
+$routes->get('/', 'StoreController::index');
+$routes->get('trocas-e-devolucoes', 'StoreController::returns');
+$routes->get('privacidade', 'StoreController::privacy');
 
 // Autenticação
 $routes->get('login', 'AuthController::login', ['filter' => 'guest', 'as' => 'login']);

@@ -37,6 +37,11 @@ body.app {
     border-bottom: 1px solid rgba(255, 255, 255, .08);
 }
 
+.app-brand-logo {
+    height: auto;
+    display: block;
+}
+
 .app-nav-section {
     padding: 1rem 1rem .35rem;
     font-size: .7rem;
@@ -202,12 +207,12 @@ body.app {
 
 /* Login */
 .auth-page {
-    background: linear-gradient(135deg, #111827 0%, #1e3a8a 100%);
+    background: #111827 url("../brand/login-bg.jpg") center / cover no-repeat;
 }
 
 .auth-logo {
-    border-radius: 14px;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+    max-width: 100%;
+    height: auto;
 }
 
 .auth-page .text-center h1,

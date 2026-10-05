@@ -4,8 +4,16 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= esc($title ?? 'Entrar') ?> · Vitrine Hub</title>
-    <meta name="theme-color" content="#1e40af">
-    <link rel="icon" type="image/svg+xml" href="<?= base_url('assets/brand/logo-mark.svg') ?>">
+    <meta name="description" content="Gestão de produtos, fornecedores e marketplaces em um só lugar.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Vitrine Hub">
+    <meta property="og:title" content="Vitrine Hub">
+    <meta property="og:description" content="Gestão de produtos, fornecedores e marketplaces em um só lugar.">
+    <meta property="og:image" content="<?= base_url('assets/brand/og-image.jpg') ?>">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <?= $this->include('partials/head_brand') ?>
     <link rel="stylesheet" href="<?= base_url('assets/vendor/bootstrap/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/app.css') ?>">

@@ -1,3 +1,7 @@
+<p align="center">
+    <img src="public/assets/brand/logo-horizontal.png" alt="Vitrine Hub" width="360">
+</p>
+
 # Vitrine Hub
 
 ## Descrição

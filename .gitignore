@@ -132,3 +132,6 @@ _modules/*
 .phpunit.cache/
 .phpunit.result.cache
 .playwright-mcp/
+
+# Originais das imagens da marca (versões otimizadas ficam em public/assets/brand)
+/imagens/

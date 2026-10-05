@@ -4,17 +4,15 @@ $user       = auth_user();
 ?>
 <aside class="offcanvas-lg offcanvas-start app-sidebar text-white" tabindex="-1" id="sidebar" aria-labelledby="sidebarLabel">
     <div class="offcanvas-header border-bottom border-secondary-subtle">
-        <span class="offcanvas-title fw-semibold d-flex align-items-center gap-2" id="sidebarLabel">
-            <img src="<?= base_url('assets/brand/logo-mark.svg') ?>" alt="" width="28" height="28">
-            Vitrine Hub
+        <span class="offcanvas-title" id="sidebarLabel">
+            <img src="<?= base_url('assets/brand/logo-horizontal-white.png') ?>" alt="Vitrine Hub" width="128" height="32" class="app-brand-logo">
         </span>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" data-bs-target="#sidebar" aria-label="Fechar"></button>
     </div>
 
     <div class="offcanvas-body d-flex flex-column p-0">
         <a href="<?= site_url('dashboard') ?>" class="app-brand d-none d-lg-flex align-items-center gap-2 px-3 text-white text-decoration-none">
-            <img src="<?= base_url('assets/brand/logo-mark.svg') ?>" alt="" width="30" height="30">
-            <span class="fw-semibold">Vitrine Hub</span>
+            <img src="<?= base_url('assets/brand/logo-horizontal-white.png') ?>" alt="Vitrine Hub" width="144" height="36" class="app-brand-logo">
         </a>
 
         <nav class="flex-grow-1 overflow-auto py-2">

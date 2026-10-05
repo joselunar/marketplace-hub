@@ -103,7 +103,7 @@ $description = 'Loja de variedades com produtos para casa, eletrônicos, ferrame
         <hr class="store-footer-divider">
         <div class="d-flex flex-column flex-md-row justify-content-between gap-2 small">
             <span><?= esc($store->name) ?> · <?= esc($store->legalName) ?> · CNPJ <?= esc($store->cnpj) ?> · <?= esc($store->city) ?></span>
-            <span>© <?= date('Y') ?> <?= esc($store->name) ?>. Mercado Livre e Mercado Pago são marcas de seus respectivos titulares.</span>
+            <span>© <?= date('Y') ?> <?= esc($store->name) ?>. Mercado Livre e Mercado Pago são marcas de seus respectivos titulares. · <a href="<?= site_url('login') ?>" rel="nofollow">Acesso restrito</a></span>
         </div>
     </div>
 </footer>

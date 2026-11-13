@@ -166,7 +166,7 @@ class CommercialIntelligenceService
         $rows = [];
         foreach ($this->realDropifyProducts() as $product) {
             $id = (int) $product['id'];
-            if ($refresh || $this->intelligence->findForProduct($id) === null) {
+            if ($refresh) {
                 try {
                     $rows[] = $this->refreshProduct($id, $userId);
                 } catch (BusinessRuleException $e) {
@@ -176,9 +176,32 @@ class CommercialIntelligenceService
                         'score'   => ['total' => 0, 'label' => 'indisponível'],
                     ];
                 }
-            } else {
-                $rows[] = $this->getProduct($id);
+                continue;
             }
+
+            if ($this->intelligence->findForProduct($id) !== null) {
+                $rows[] = $this->getProduct($id);
+                continue;
+            }
+
+            $offer    = $this->offers->where('product_id', $id)->orderBy('id', 'DESC')->first();
+            $analysis = $this->analyses->where('product_id', $id)->first();
+            $rows[]   = [
+                'product'      => $product,
+                'offer'        => $offer,
+                'analysis'     => $analysis,
+                'intelligence' => null,
+                'targets'      => [],
+                'competition'  => [],
+                'score'        => [
+                    'total'            => 0,
+                    'label'            => 'aguardando_atualizacao',
+                    'proven_profit'    => false,
+                    'data_reliability' => 'desconhecido',
+                    'recommendation'   => 'Clique em Atualizar portfólio ou abra o detalhe para cotar preços e concorrência.',
+                ],
+                'observations' => [],
+            ];
         }
 
         usort($rows, static function (array $a, array $b): int {

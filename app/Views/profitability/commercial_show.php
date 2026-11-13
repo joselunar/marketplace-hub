@@ -33,12 +33,18 @@ $relBadge = static function (?string $rel): string {
     <div class="d-flex flex-wrap gap-2">
         <form method="post" action="<?= site_url('profitability/commercial/' . $pid . '/refresh') ?>">
             <?= csrf_field() ?>
-            <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-arrow-repeat me-1"></i>Recotar</button>
+            <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-arrow-repeat me-1"></i><?= empty($data['intelligence']) ? 'Cotar agora' : 'Recotar' ?></button>
         </form>
         <a class="btn btn-sm btn-outline-secondary" href="<?= site_url('profitability/commercial/' . $pid . '/ops') ?>">Operação mensal</a>
         <a class="btn btn-sm btn-light" href="<?= site_url('profitability/' . $pid) ?>">Rentabilidade</a>
     </div>
 </div>
+
+<?php if (empty($data['intelligence'])): ?>
+    <div class="alert alert-info">
+        Ainda não há snapshot comercial deste produto. Use <strong>Cotar agora</strong> para calcular preços-alvo (com reconsulta de tarifas) e buscar concorrentes no Mercado Livre.
+    </div>
+<?php endif ?>
 
 <?php if (! empty($cepPending)): ?>
     <div class="alert alert-warning">

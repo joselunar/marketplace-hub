@@ -110,7 +110,15 @@ $scoreBadge = static function (array $score): string {
                     <td class="text-nowrap">
                         <?php if ($pid > 0): ?>
                             <a class="btn btn-sm btn-outline-primary" href="<?= site_url('profitability/commercial/' . $pid) ?>">Detalhe</a>
-                            <a class="btn btn-sm btn-outline-secondary" href="<?= site_url('profitability/commercial/' . $pid . '/ops') ?>">Ops</a>
+                            <?php if (($row['intelligence'] ?? null) === null): ?>
+                                <form method="post" action="<?= site_url('profitability/commercial/' . $pid . '/refresh') ?>" class="d-inline">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="redirect_to" value="list">
+                                    <button type="submit" class="btn btn-sm btn-primary">Cotar</button>
+                                </form>
+                            <?php else: ?>
+                                <a class="btn btn-sm btn-outline-secondary" href="<?= site_url('profitability/commercial/' . $pid . '/ops') ?>">Ops</a>
+                            <?php endif ?>
                         <?php endif ?>
                     </td>
                 </tr>

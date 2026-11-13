@@ -102,7 +102,10 @@ class CommercialIntelligenceService
             (int) $account['id'],
         );
 
-        $competition = $this->competition->analyze($account, $product, $offer, $userId);
+        $competition = $this->enrichCompetition(
+            $productId,
+            $this->competition->analyze($account, $product, $offer, $userId),
+        );
         $target20    = $this->findTarget($targets, '20.00');
         $score       = $this->score($product, $offer, $analysis ?? [], $targets, $competition, $target20);
 
@@ -127,6 +130,40 @@ class CommercialIntelligenceService
     }
 
     /**
+     * Recompõe concorrência/score após registro manual, sem reconsultar tarifas.
+     *
+     * @return array<string, mixed>
+     */
+    public function recomputeAfterManual(int $productId, ?int $userId = null): array
+    {
+        $existing = $this->intelligence->findForProduct($productId);
+        if ($existing === null) {
+            return $this->refreshProduct($productId, $userId);
+        }
+
+        $product = $this->products->find($productId);
+        if ($product === null) {
+            throw new BusinessRuleException('Produto não encontrado.');
+        }
+        $offer    = $this->offers->where('product_id', $productId)->orderBy('id', 'DESC')->first();
+        $analysis = $this->analyses->where('product_id', $productId)->first() ?? [];
+        $targets  = json_decode((string) $existing['targets_json'], true) ?: [];
+        $competition = json_decode((string) ($existing['competition_json'] ?? '{}'), true) ?: [];
+        $competition = $this->enrichCompetition($productId, $competition);
+        $target20 = $this->findTarget($targets, '20.00');
+        $score    = $this->score($product, $offer, $analysis, $targets, $competition, $target20);
+
+        $this->intelligence->update((int) $existing['id'], [
+            'competition_json' => json_encode($competition, JSON_UNESCAPED_UNICODE),
+            'score_json'       => json_encode($score, JSON_UNESCAPED_UNICODE),
+            'data_reliability' => $score['data_reliability'],
+            'created_by'       => $userId,
+        ]);
+
+        return $this->getProduct($productId);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function getProduct(int $productId): array
@@ -142,6 +179,11 @@ class CommercialIntelligenceService
         $competition= $intel ? (json_decode((string) $intel['competition_json'], true) ?: []) : [];
         $score      = $intel ? (json_decode((string) $intel['score_json'], true) ?: []) : [];
 
+        $observations = $this->observations->latestForProduct($productId, 30);
+        if ($competition !== []) {
+            $competition = $this->enrichCompetition($productId, $competition, $observations);
+        }
+
         return [
             'product'      => $product,
             'offer'        => $offer,
@@ -150,7 +192,7 @@ class CommercialIntelligenceService
             'targets'      => $targets,
             'competition'  => $competition,
             'score'        => $score,
-            'observations' => $this->observations->latestForProduct($productId, 30),
+            'observations' => $observations,
         ];
     }
 
@@ -267,6 +309,66 @@ class CommercialIntelligenceService
         $sim['stock'] = $offer['stock_quantity'] ?? null;
 
         return $sim;
+    }
+
+    /**
+     * Inclui observações manuais nas estatísticas quando a API não cobre.
+     *
+     * @param array<string, mixed> $competition
+     * @param list<array<string, mixed>>|null $observations
+     *
+     * @return array<string, mixed>
+     */
+    private function enrichCompetition(int $productId, array $competition, ?array $observations = null): array
+    {
+        $observations ??= $this->observations->latestForProduct($productId, 40);
+        $manual = [];
+        foreach ($observations as $obs) {
+            if (($obs['source'] ?? '') !== 'manual') {
+                continue;
+            }
+            $price = Decimal::normalize((string) ($obs['external_price'] ?? ''));
+            if ($price === null) {
+                continue;
+            }
+            $manual[] = [
+                'id'               => $obs['external_item_id'] ?? null,
+                'title'            => $obs['external_title'] ?? '',
+                'price'            => $price,
+                'currency_id'      => $obs['currency_id'] ?? 'BRL',
+                'free_shipping'    => $obs['free_shipping'],
+                'permalink'        => $obs['permalink'] ?? $obs['source_url'] ?? null,
+                'seller_nickname'  => $obs['seller_nickname'] ?? null,
+                'match_type'       => 'manual',
+                'equivalence_note' => $obs['equivalence_note'] ?? 'Registro manual',
+                'source'           => 'manual',
+            ];
+        }
+
+        if ($manual === []) {
+            return $competition;
+        }
+
+        $items = array_values(array_merge($competition['items'] ?? [], $manual));
+        $prices = [];
+        foreach ($items as $item) {
+            if (! empty($item['price'])) {
+                $prices[] = (string) $item['price'];
+            }
+        }
+        usort($prices, static fn (string $a, string $b): int => bccomp($a, $b, 2));
+
+        $competition['items'] = $items;
+        $competition['stats'] = $this->competition->stats($prices);
+        $competition['manual_count'] = count($manual);
+        $limitations = $competition['limitations'] ?? [];
+        $limitations[] = 'Estatísticas incluem ' . count($manual) . ' registro(s) manual(is) com fonte informada pelo usuário.';
+        $competition['limitations'] = array_values(array_unique($limitations));
+        if (($competition['method'] ?? 'none') === 'none') {
+            $competition['method'] = 'manual';
+        }
+
+        return $competition;
     }
 
     /**

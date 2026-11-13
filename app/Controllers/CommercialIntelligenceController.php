@@ -112,7 +112,7 @@ class CommercialIntelligenceController extends BaseController
                 $this->request->getPost('note') !== null ? (string) $this->request->getPost('note') : null,
                 $this->auth()->id(),
             );
-            $this->service()->refreshProduct($productId, $this->auth()->id());
+            $this->service()->recomputeAfterManual($productId, $this->auth()->id());
         } catch (BusinessRuleException $e) {
             return redirect()->to('profitability/commercial/' . $productId)->with('error', $e->getMessage());
         }

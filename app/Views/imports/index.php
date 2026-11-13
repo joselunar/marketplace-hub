@@ -27,6 +27,7 @@
                 <a class="btn btn-sm btn-light" href="<?= site_url('imports') ?>">Limpar</a>
             </div>
             <div class="col text-end">
+                <a href="<?= site_url('imports/dropify') ?>" class="btn btn-sm btn-outline-success"><i class="bi bi-file-earmark-spreadsheet me-1"></i> Dropify</a>
                 <a href="<?= site_url('imports/new') ?>" class="btn btn-sm btn-success"><i class="bi bi-cloud-upload me-1"></i> Importar CSV</a>
             </div>
         </form>

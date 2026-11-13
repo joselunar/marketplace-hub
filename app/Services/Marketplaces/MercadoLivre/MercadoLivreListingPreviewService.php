@@ -98,6 +98,15 @@ class MercadoLivreListingPreviewService
             $errors[] = 'O produto está inativo.';
         }
 
+        // Novas publicações Dropify: mesma regra do publish() (não só o botão).
+        if ($existing === null || ($existing['status'] ?? '') === MarketplaceListingModel::STATUS_PENDING) {
+            try {
+                service('profitability')->assertPublishable($productId);
+            } catch (BusinessRuleException $e) {
+                $errors[] = $e->getMessage();
+            }
+        }
+
         // Fornecedor principal e estoque seguro (já descontado o estoque de segurança).
         $selection = ($this->selection ?? service('supplierSelection'))->evaluate($productId);
         $offer     = $selection->primary();

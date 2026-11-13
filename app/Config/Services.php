@@ -16,6 +16,7 @@ use App\Services\Marketplaces\MercadoLivre\MercadoLivreProductService;
 use App\Services\Marketplaces\MercadoLivre\MercadoLivreService;
 use App\Services\Orders\OrderService;
 use App\Services\Pricing\PricingService;
+use App\Services\Profitability\ProfitabilityService;
 use App\Services\Settings\SettingsService;
 use App\Services\Suppliers\SupplierSelectionService;
 use App\Services\Suppliers\SupplierSyncService;
@@ -164,6 +165,15 @@ class Services extends BaseService
         }
 
         return new ListingAutoSync();
+    }
+
+    public static function profitability(bool $getShared = true): ProfitabilityService
+    {
+        if ($getShared) {
+            return static::getSharedInstance('profitability');
+        }
+
+        return new ProfitabilityService();
     }
 
     /**

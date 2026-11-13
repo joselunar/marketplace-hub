@@ -70,6 +70,15 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->get('pricing', 'PricingController::index');
     $routes->get('pricing/simulate', 'PricingController::simulate');
 
+    $routes->group('profitability', static function (RouteCollection $routes): void {
+        $routes->get('/', 'ProfitabilityController::index');
+        $routes->get('checklist', 'ProfitabilityController::checklist');
+        $routes->post('checklist/(:num)', 'ProfitabilityController::updateChecklist/$1');
+        $routes->get('(:num)', 'ProfitabilityController::show/$1');
+        $routes->post('(:num)/recalculate', 'ProfitabilityController::recalculate/$1');
+        $routes->post('(:num)/simulate', 'ProfitabilityController::simulate/$1');
+    });
+
     $routes->group('offers', static function (RouteCollection $routes): void {
         $routes->get('/', 'SupplierOfferController::index');
         $routes->get('new', 'SupplierOfferController::new');
@@ -83,6 +92,8 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->group('imports', static function (RouteCollection $routes): void {
         $routes->get('/', 'SupplierImportController::index');
         $routes->get('new', 'SupplierImportController::new');
+        $routes->get('dropify', 'DropifyImportController::new');
+        $routes->post('dropify', 'DropifyImportController::create');
         $routes->get('template', 'SupplierImportController::template');
         $routes->post('/', 'SupplierImportController::create');
         $routes->get('(:num)', 'SupplierImportController::show/$1');

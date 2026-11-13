@@ -12,7 +12,11 @@ class SupplierOfferModel extends Model
     protected $useTimestamps = true;
     protected $allowedFields = [
         'supplier_id', 'product_id', 'supplier_sku', 'supplier_product_name', 'ean',
-        'cost_price', 'stock_quantity', 'shipping_cost', 'shipping_days', 'active', 'blocked', 'blocked_reason', 'last_sync_at',
+        'cost_price', 'suggested_price', 'stock_quantity', 'shipping_cost', 'shipping_days',
+        'weight_grams', 'height_cm', 'width_cm', 'length_cm', 'ncm', 'cest', 'fiscal_origin',
+        'origin_uf', 'origin_postal_code', 'source_category', 'availability_status',
+        'short_description', 'image_urls', 'metadata',
+        'active', 'blocked', 'blocked_reason', 'last_sync_at',
     ];
     protected $validationRules = [
         'id'                    => 'permit_empty|is_natural_no_zero',

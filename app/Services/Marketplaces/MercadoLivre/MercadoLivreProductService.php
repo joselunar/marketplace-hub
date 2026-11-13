@@ -87,6 +87,9 @@ class MercadoLivreProductService
      */
     public function publish(int $productId, array $input, string $confirmedPrice, int $confirmedQuantity, ?int $accountId, ?int $userId): array
     {
+        // Bloqueio de rentabilidade para produtos Dropify (feature flag no serviço).
+        service('profitability')->assertPublishable($productId);
+
         $preview = $this->previews->preview($productId, $input, $accountId);
 
         if (! $preview->canPublish()) {

@@ -14,7 +14,7 @@ class SupplierModel extends Model
     protected $useTimestamps = true;
     protected $allowedFields = [
         'name', 'legal_name', 'document', 'email', 'phone', 'website',
-        'integration_type', 'status', 'priority', 'default_shipping_days', 'safety_stock', 'notes',
+        'integration_type', 'provider_code', 'status', 'priority', 'default_shipping_days', 'safety_stock', 'notes',
     ];
     protected $validationMessages = [
         'document' => ['is_unique' => 'Já existe um fornecedor com este documento.'],

@@ -22,6 +22,10 @@ class ProductModel extends Model
         'sku', 'ean', 'name', 'slug', 'description', 'brand', 'category_id',
         'weight', 'height', 'width', 'length', 'safety_stock', 'active',
         'desired_margin_percentage', 'minimum_margin_percentage', 'extra_cost', 'sale_price',
+        'ncm', 'cest', 'fiscal_origin', 'origin_uf', 'source_provider',
+        'selected_offer_id', 'selection_updated_at',
+        'minimum_price', 'estimated_profit', 'estimated_margin',
+        'price_status', 'pricing_updated_at',
     ];
     protected $validationRules = [
         'id'          => 'permit_empty|is_natural_no_zero',

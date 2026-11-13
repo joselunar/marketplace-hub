@@ -54,7 +54,7 @@ class HomologationChecklistService
             ]);
         }
 
-        return $this->list();
+        return $this->fetchItems();
     }
 
     /**
@@ -62,8 +62,14 @@ class HomologationChecklistService
      */
     public function list(): array
     {
-        $this->ensureDefaults();
+        return $this->ensureDefaults();
+    }
 
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function fetchItems(): array
+    {
         return $this->items
             ->where('provider_code', DropifyImportService::PROVIDER)
             ->orderBy('sort_order')

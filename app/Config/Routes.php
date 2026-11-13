@@ -60,6 +60,24 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
         $routes->post('supplier-orders/(:num)', 'OrderController::updateSupplierOrder/$1');
     });
 
+    $routes->group('fiscal', static function (RouteCollection $routes): void {
+        $routes->get('/', 'FiscalController::index');
+        $routes->get('company', 'FiscalController::company');
+        $routes->post('company', 'FiscalController::saveCompany');
+        $routes->post('company/tax', 'FiscalController::saveTaxParams');
+        $routes->post('certificate', 'FiscalController::uploadCertificate');
+        $routes->post('status-servico', 'FiscalController::statusServico');
+        $routes->post('prepare/(:num)', 'FiscalController::prepareFromOrder/$1');
+        $routes->get('(:num)', 'FiscalController::show/$1');
+        $routes->post('(:num)/transmit', 'FiscalController::transmit/$1');
+        $routes->post('(:num)/consultar', 'FiscalController::consultar/$1');
+        $routes->post('(:num)/cancelar', 'FiscalController::cancelar/$1');
+        $routes->post('(:num)/danfe', 'FiscalController::gerarDanfe/$1');
+        $routes->get('(:num)/xml/(:segment)', 'FiscalController::downloadXml/$1/$2');
+        $routes->get('(:num)/danfe/download', 'FiscalController::downloadDanfe/$1');
+        $routes->post('(:num)/ml-send', 'FiscalController::sendToMercadoLivre/$1');
+    });
+
     $routes->get('sync', 'SyncController::index');
     $routes->group('sync', ['filter' => 'marketplacethrottle'], static function (RouteCollection $routes): void {
         $routes->post('tasks/(:segment)/run', 'SyncController::runTask/$1');

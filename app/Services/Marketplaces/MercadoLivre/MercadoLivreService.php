@@ -112,6 +112,14 @@ class MercadoLivreService
         return $this->withToken($accountId, fn (string $token): array => $this->api->put($path, $token, $body));
     }
 
+    /**
+     * POST XML autenticado (NF-e / invoice_data).
+     */
+    public function postXml(int $accountId, string $path, string $xml): array
+    {
+        return $this->withToken($accountId, fn (string $token): array => $this->api->postXml($path, $token, $xml));
+    }
+
     public function delete(int $accountId, string $path): array
     {
         return $this->withToken($accountId, fn (string $token): array => $this->api->delete($path, $token));

@@ -24,6 +24,14 @@ $canRealloc = $paid && ! $fraud && $placed === [];
     </div>
     <div class="d-flex flex-wrap gap-2">
         <form action="<?= site_url('orders/' . $order['id'] . '/sync') ?>" method="post"><?= csrf_field() ?><button class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Atualizar pedido</button></form>
+        <?php if ($paid && ! $fraud): ?>
+            <form action="<?= site_url('fiscal/prepare/' . $order['id']) ?>" method="post">
+                <?= csrf_field() ?>
+                <button class="btn btn-sm btn-outline-dark" type="submit" title="Cria rascunho; emissão real permanece bloqueada">
+                    <i class="bi bi-receipt"></i> Preparar NF-e
+                </button>
+            </form>
+        <?php endif ?>
         <?php if ($canRealloc): ?>
             <form action="<?= site_url('orders/' . $order['id'] . '/reallocate') ?>" method="post" data-confirm="Desfazer as reservas não enviadas e escolher os fornecedores de novo, com estoque e preços atuais?">
                 <?= csrf_field() ?><button class="btn btn-sm btn-outline-primary"><i class="bi bi-shuffle"></i> Revalidar fornecedores</button>

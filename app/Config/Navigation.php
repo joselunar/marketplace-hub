@@ -58,6 +58,7 @@ class Navigation extends BaseConfig
             'label' => 'Vendas',
             'items' => [
                 ['label' => 'Pedidos', 'icon' => 'cart-check', 'url' => 'orders', 'prefix' => 'orders'],
+                ['label' => 'Fiscal NF-e', 'icon' => 'receipt', 'url' => 'fiscal', 'prefix' => 'fiscal'],
             ],
         ],
         [

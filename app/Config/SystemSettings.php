@@ -28,6 +28,7 @@ class SystemSettings extends BaseConfig
         'mei'           => 'MEI (limites legais)',
         'dropify'       => 'Dropify',
         'meli'          => 'Mercado Livre (logística)',
+        'fiscal'        => 'Fiscal (NF-e)',
     ];
 
     /**
@@ -414,6 +415,58 @@ class SystemSettings extends BaseConfig
             'default' => false,
             'rules'   => 'permit_empty|in_list[0,1]',
             'help'    => 'Permanece desligada até haver documentação e credenciais oficiais.',
+        ],
+        'fiscal.enabled' => [
+            'group'   => 'fiscal',
+            'type'    => 'bool',
+            'label'   => 'Módulo fiscal habilitado (painel e rascunhos)',
+            'default' => false,
+            'rules'   => 'permit_empty|in_list[0,1]',
+            'help'    => 'Libera o painel fiscal e preparação de rascunhos. Não autoriza emissão real.',
+        ],
+        'fiscal.environment' => [
+            'group'   => 'fiscal',
+            'type'    => 'string',
+            'label'   => 'Ambiente fiscal configurado',
+            'default' => 'homologacao',
+            'rules'   => 'required|in_list[homologacao,producao]',
+            'help'    => 'Produção só vale se a emissão real estiver autorizada. Caso contrário o sistema força homologação.',
+            'options' => [
+                'homologacao' => 'Homologação SEFAZ',
+                'producao'    => 'Produção (bloqueada até autorização)',
+            ],
+        ],
+        'fiscal.real_emission_authorized' => [
+            'group'   => 'fiscal',
+            'type'    => 'bool',
+            'label'   => 'Autorizar emissão real (produção)',
+            'default' => false,
+            'rules'   => 'permit_empty|in_list[0,1]',
+            'help'    => 'Mantenha desligado. Só ative após certificado A1, credenciamento, regras do contador e sua autorização explícita.',
+        ],
+        'fiscal.ml_xml_send_authorized' => [
+            'group'   => 'fiscal',
+            'type'    => 'bool',
+            'label'   => 'Autorizar envio de XML ao Mercado Livre',
+            'default' => false,
+            'rules'   => 'permit_empty|in_list[0,1]',
+            'help'    => 'XML de homologação nunca é enviado. Em produção exige emissão real autorizada.',
+        ],
+        'fiscal.homolog_serie' => [
+            'group'   => 'fiscal',
+            'type'    => 'int',
+            'label'   => 'Série NF-e de homologação',
+            'default' => 900,
+            'rules'   => 'required|is_natural_no_zero|less_than_equal_to[999]',
+            'help'    => 'Faixa separada para não consumir numeração de produção.',
+        ],
+        'fiscal.homolog_next_number' => [
+            'group'   => 'fiscal',
+            'type'    => 'int',
+            'label'   => 'Próximo número NF-e (homologação)',
+            'default' => 1,
+            'rules'   => 'required|is_natural_no_zero|less_than_equal_to[999999999]',
+            'help'    => 'Incrementado automaticamente a cada transmissão em homologação.',
         ],
     ];
 }

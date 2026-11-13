@@ -68,6 +68,12 @@ Vagrantfile
 /writable/debugbar/*
 !/writable/debugbar/index.html
 
+/writable/fiscal/**
+!/writable/fiscal/index.html
+!/writable/fiscal/**/index.html
+
+/composer.phar
+
 php_errors.log
 
 #-------------------------

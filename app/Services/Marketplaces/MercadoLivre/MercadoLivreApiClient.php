@@ -68,6 +68,16 @@ class MercadoLivreApiClient
         return $this->send('PUT', $path, $this->authHeaders($accessToken) + ['Content-Type' => 'application/json'], $this->encode($body));
     }
 
+    /**
+     * POST com corpo XML (ex.: NF-e para /shipments/{id}/invoice_data).
+     */
+    public function postXml(string $path, string $accessToken, string $xml): array
+    {
+        return $this->send('POST', $path, $this->authHeaders($accessToken) + [
+            'Content-Type' => 'application/xml; charset=utf-8',
+        ], $xml);
+    }
+
     private function encode(array $body): string
     {
         return json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);

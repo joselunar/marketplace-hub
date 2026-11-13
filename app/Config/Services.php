@@ -16,6 +16,7 @@ use App\Services\Marketplaces\MercadoLivre\MercadoLivreProductService;
 use App\Services\Marketplaces\MercadoLivre\MercadoLivreService;
 use App\Services\Orders\OrderService;
 use App\Services\Pricing\PricingService;
+use App\Services\Profitability\CommercialIntelligenceService;
 use App\Services\Profitability\ProfitabilityService;
 use App\Services\Settings\SettingsService;
 use App\Services\Suppliers\SupplierSelectionService;
@@ -174,6 +175,15 @@ class Services extends BaseService
         }
 
         return new ProfitabilityService();
+    }
+
+    public static function commercialIntelligence(bool $getShared = true): CommercialIntelligenceService
+    {
+        if ($getShared) {
+            return static::getSharedInstance('commercialIntelligence');
+        }
+
+        return new CommercialIntelligenceService();
     }
 
     /**

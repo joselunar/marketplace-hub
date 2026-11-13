@@ -25,6 +25,7 @@ class SystemSettings extends BaseConfig
         'marketplace'   => 'Marketplaces',
         'profitability' => 'Rentabilidade',
         'fixed_costs'   => 'Custos fixos (planejamento)',
+        'mei'           => 'MEI (limites legais)',
         'dropify'       => 'Dropify',
         'meli'          => 'Mercado Livre (logística)',
     ];
@@ -382,6 +383,22 @@ class SystemSettings extends BaseConfig
             'default' => 30,
             'rules'   => 'required|is_natural_no_zero|less_than_equal_to[100000]',
             'help'    => 'Usado só para estimar o rateio por unidade. Não é demanda verificada.',
+        ],
+        'mei.annual_revenue_limit' => [
+            'group'   => 'mei',
+            'type'    => 'decimal',
+            'label'   => 'Teto de faturamento anual MEI (R$)',
+            'default' => '81000.00',
+            'rules'   => 'required|decimal|greater_than[0]|less_than[10000000]',
+            'help'    => 'Parâmetro legal editável. Confirme o valor vigente com o contador; a simulação não decide enquadramento fiscal.',
+        ],
+        'mei.alert_percentage' => [
+            'group'   => 'mei',
+            'type'    => 'decimal',
+            'label'   => 'Alerta antecipado do teto MEI (%)',
+            'default' => '80.00',
+            'rules'   => 'required|decimal|greater_than[0]|less_than_equal_to[100]',
+            'help'    => 'Quando a projeção anualizada atingir este percentual do teto, o painel exibe aviso.',
         ],
         'dropify.csv_enabled' => [
             'group'   => 'dropify',

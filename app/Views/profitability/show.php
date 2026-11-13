@@ -31,6 +31,7 @@ $reasons = json_decode((string) ($analysis['block_reasons'] ?? '[]'), true) ?: (
             <?= csrf_field() ?>
             <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-arrow-repeat me-1"></i>Recalcular</button>
         </form>
+        <a class="btn btn-sm btn-outline-primary" href="<?= site_url('profitability/commercial/' . $analysis['product_id']) ?>">Inteligência comercial</a>
         <a class="btn btn-sm btn-light" href="<?= site_url('products/' . $analysis['product_id']) ?>">Produto</a>
     </div>
 </div>

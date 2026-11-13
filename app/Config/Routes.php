@@ -77,6 +77,13 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
         $routes->get('logistics', 'ProfitabilityController::logistics');
         $routes->post('logistics', 'ProfitabilityController::confirmLogistics');
         $routes->get('ranking', 'ProfitabilityController::ranking');
+        $routes->get('commercial', 'CommercialIntelligenceController::index');
+        $routes->post('commercial/refresh', 'CommercialIntelligenceController::refreshAll');
+        $routes->get('commercial/(:num)', 'CommercialIntelligenceController::show/$1');
+        $routes->post('commercial/(:num)/refresh', 'CommercialIntelligenceController::refresh/$1');
+        $routes->post('commercial/(:num)/competitor', 'CommercialIntelligenceController::addCompetitor/$1');
+        $routes->get('commercial/(:num)/ops', 'CommercialIntelligenceController::ops/$1');
+        $routes->post('commercial/(:num)/ops', 'CommercialIntelligenceController::opsSimulate/$1');
         $routes->get('(:num)', 'ProfitabilityController::show/$1');
         $routes->post('(:num)/recalculate', 'ProfitabilityController::recalculate/$1');
         $routes->post('(:num)/simulate', 'ProfitabilityController::simulate/$1');

@@ -14,6 +14,7 @@ class HomologationChecklistService
         ['item_code' => 'integrator_homologation', 'label' => 'É necessária homologação como integrador?', 'sort_order' => 20],
         ['item_code' => 'accepts_ml_label', 'label' => 'O fornecedor aceita etiqueta do Mercado Envios da conta VITRINEHUB?', 'sort_order' => 30],
         ['item_code' => 'origin_compatible', 'label' => 'Origem física e fiscal da mercadoria compatível com a conta ML?', 'sort_order' => 40],
+        ['item_code' => 'origin_cep_sp', 'label' => 'CEP real de expedição dos fornecedores Dropify em São Paulo confirmado por escrito?', 'sort_order' => 45],
         ['item_code' => 'extra_dispatch_costs', 'label' => 'Há custos adicionais de expedição? (registrar valor e evidência)', 'sort_order' => 50],
         ['item_code' => 'fiscal_docs_required', 'label' => 'Documentação fiscal obrigatória definida (venda à ordem / remessa)?', 'sort_order' => 60],
         ['item_code' => 'returns_sla', 'label' => 'Devoluções, prazos e responsabilidade por atraso documentados?', 'sort_order' => 70],

@@ -31,7 +31,7 @@ class Navigation extends BaseConfig
                 ['label' => 'Categorias', 'icon' => 'diagram-3', 'url' => 'categories', 'prefix' => 'categories'],
                 ['label' => 'Ofertas de fornecedores', 'icon' => 'tags', 'url' => 'offers', 'prefix' => 'offers'],
                 ['label' => 'Simulador de preços', 'icon' => 'calculator', 'url' => 'pricing', 'prefix' => 'pricing'],
-                ['label' => 'Rentabilidade', 'icon' => 'graph-up-arrow', 'url' => 'profitability', 'prefix' => 'profitability', 'exclude' => 'profitability/checklist'],
+                ['label' => 'Rentabilidade', 'icon' => 'graph-up-arrow', 'url' => 'profitability', 'prefix' => 'profitability', 'exclude' => 'profitability/checklist,profitability/logistics'],
             ],
         ],
         [
@@ -41,6 +41,7 @@ class Navigation extends BaseConfig
                 ['label' => 'Importações', 'icon' => 'cloud-upload', 'url' => 'imports', 'prefix' => 'imports', 'exclude' => 'imports/dropify'],
                 ['label' => 'Importar Dropify', 'icon' => 'file-earmark-spreadsheet', 'url' => 'imports/dropify', 'prefix' => 'imports/dropify'],
                 ['label' => 'Checklist Dropify', 'icon' => 'clipboard-check', 'url' => 'profitability/checklist', 'prefix' => 'profitability/checklist'],
+                ['label' => 'Logística ML', 'icon' => 'geo', 'url' => 'profitability/logistics', 'prefix' => 'profitability/logistics'],
             ],
         ],
         [

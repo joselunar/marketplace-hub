@@ -23,6 +23,8 @@ class ProductModel extends Model
         'weight', 'height', 'width', 'length', 'safety_stock', 'active',
         'desired_margin_percentage', 'minimum_margin_percentage', 'extra_cost', 'sale_price',
         'ncm', 'cest', 'fiscal_origin', 'origin_uf', 'source_provider',
+        'marketplace_category_id', 'marketplace_category_name',
+        'marketplace_category_source', 'marketplace_category_confirmed_at',
         'selected_offer_id', 'selection_updated_at',
         'minimum_price', 'estimated_profit', 'estimated_margin',
         'price_status', 'pricing_updated_at',

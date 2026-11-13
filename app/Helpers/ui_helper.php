@@ -336,7 +336,13 @@ if (! function_exists('nav_active')) {
     {
         $path = trim(service('request')->getUri()->getPath(), '/');
 
-        return ($path === $prefix || str_starts_with($path, $prefix . '/')) ? 'active' : '';
+        foreach (array_map('trim', explode(',', $prefix)) as $item) {
+            if ($item !== '' && ($path === $item || str_starts_with($path, $item . '/'))) {
+                return 'active';
+            }
+        }
+
+        return '';
     }
 }
 

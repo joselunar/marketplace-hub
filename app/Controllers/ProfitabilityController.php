@@ -4,11 +4,15 @@ namespace App\Controllers;
 
 use App\DTO\Profitability\ProfitabilityResult;
 use App\Exceptions\BusinessRuleException;
+use App\Exceptions\ValidationException;
 use App\Models\CategoryModel;
 use App\Models\ProfitabilityAnalysisHistoryModel;
 use App\Models\ProfitabilityAnalysisModel;
 use App\Models\SupplierModel;
+use App\Models\SupplierOfferModel;
+use App\Services\Marketplaces\MercadoLivre\MercadoLivreLogisticsService;
 use App\Services\Profitability\HomologationChecklistService;
+use App\Services\Profitability\ProfitabilityCategoryService;
 use App\Services\Profitability\ProfitabilityService;
 use CodeIgniter\HTTP\RedirectResponse;
 
@@ -59,14 +63,25 @@ class ProfitabilityController extends BaseController
         }
 
         $breakdown = json_decode((string) ($analysis['breakdown'] ?? '{}'), true) ?: [];
+        $product   = model(\App\Models\ProductModel::class)->find($productId) ?? [];
+        $offer     = (new SupplierOfferModel())->where('product_id', $productId)->orderBy('id', 'DESC')->first();
+        $catSvc    = new ProfitabilityCategoryService();
+        $account   = $catSvc->resolveAccount();
+        $suggestions = [];
+        if ($account !== null) {
+            $suggestions = $catSvc->suggest($product, $offer, $account);
+        }
 
         return view('profitability/show', [
-            'title'       => 'Análise · ' . ($analysis['product_name'] ?? ('#' . $productId)),
-            'analysis'    => $analysis,
-            'breakdown'   => $breakdown,
-            'history'     => (new ProfitabilityAnalysisHistoryModel())->forProduct($productId),
-            'labels'      => ProfitabilityResult::LABELS,
-            'breadcrumbs' => ['Rentabilidade' => 'profitability', $analysis['sku'] ?? 'Produto' => null],
+            'title'        => 'Análise · ' . ($analysis['product_name'] ?? ('#' . $productId)),
+            'analysis'     => $analysis,
+            'breakdown'    => $breakdown,
+            'history'      => (new ProfitabilityAnalysisHistoryModel())->forProduct($productId),
+            'labels'       => ProfitabilityResult::LABELS,
+            'product'      => $product,
+            'offer'        => $offer,
+            'suggestions'  => $suggestions,
+            'breadcrumbs'  => ['Rentabilidade' => 'profitability', $analysis['sku'] ?? 'Produto' => null],
         ]);
     }
 
@@ -92,6 +107,90 @@ class ProfitabilityController extends BaseController
         }
 
         return redirect()->to('profitability/' . $productId)->with('success', 'Simulação aplicada e registrada no histórico.');
+    }
+
+    public function confirmCategory(int $productId): RedirectResponse
+    {
+        $categoryId = (string) $this->request->getPost('category_id');
+        $remember   = $this->request->getPost('remember_mapping') !== '0';
+        $origin     = (string) $this->request->getPost('origin') === ProfitabilityCategoryService::SOURCE_MANUAL
+            ? ProfitabilityCategoryService::SOURCE_MANUAL
+            : ProfitabilityCategoryService::SOURCE_CONFIRMED;
+
+        try {
+            $result = $this->service()->confirmCategory(
+                $productId,
+                $categoryId,
+                $this->auth()->id(),
+                $remember,
+                $origin,
+            );
+        } catch (ValidationException $e) {
+            $errors = $e->getErrors();
+            $message = $errors !== [] ? implode(' ', $errors) : $e->getMessage();
+
+            return redirect()->to('profitability/' . $productId)->with('error', $message);
+        } catch (BusinessRuleException $e) {
+            return redirect()->to('profitability/' . $productId)->with('error', $e->getMessage());
+        }
+
+        return redirect()->to('profitability/' . $productId)->with(
+            'success',
+            'Categoria MLB confirmada. Análises recalculadas: ' . $result['recalculated'] . '.',
+        );
+    }
+
+    public function logistics(): string|RedirectResponse
+    {
+        $catSvc  = new ProfitabilityCategoryService();
+        $account = $catSvc->resolveAccount();
+        $context = null;
+        $error   = null;
+
+        if ($account === null) {
+            $error = 'Nenhuma conta Mercado Livre conectada.';
+        } else {
+            try {
+                $context = (new MercadoLivreLogisticsService())->resolveQuoteContext($account);
+            } catch (\Throwable $e) {
+                $error = $e->getMessage();
+            }
+        }
+
+        $settings = service('settings');
+
+        return view('profitability/logistics', [
+            'title'       => 'Logística ML',
+            'account'     => $account,
+            'context'     => $context,
+            'error'       => $error,
+            'currentMode' => (string) $settings->get('meli.shipping_mode', ''),
+            'currentType' => (string) $settings->get('meli.logistic_type', ''),
+            'breadcrumbs' => ['Rentabilidade' => 'profitability', 'Logística ML' => null],
+        ]);
+    }
+
+    public function confirmLogistics(): RedirectResponse
+    {
+        try {
+            $result = $this->service()->confirmLogistics(
+                (string) $this->request->getPost('shipping_mode'),
+                (string) $this->request->getPost('logistic_type'),
+                $this->auth()->id(),
+            );
+        } catch (ValidationException $e) {
+            $errors = $e->getErrors();
+            $message = $errors !== [] ? implode(' ', $errors) : $e->getMessage();
+
+            return redirect()->to('profitability/logistics')->with('error', $message);
+        } catch (BusinessRuleException $e) {
+            return redirect()->to('profitability/logistics')->with('error', $e->getMessage());
+        }
+
+        return redirect()->to('profitability/logistics')->with(
+            'success',
+            'Logística confirmada. Análises recalculadas: ' . $result['recalculated'] . '.',
+        );
     }
 
     public function checklist(): string

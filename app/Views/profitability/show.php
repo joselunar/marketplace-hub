@@ -46,6 +46,71 @@ $reasons = json_decode((string) ($analysis['block_reasons'] ?? '[]'), true) ?: (
     </div>
 <?php endif ?>
 
+<div class="card mb-3">
+    <div class="card-header bg-white fw-semibold">Categoria Mercado Livre</div>
+    <div class="card-body">
+        <?php
+        $catId = $product['marketplace_category_id'] ?? ($analysis['marketplace_category_id'] ?? null);
+        $catName = $product['marketplace_category_name'] ?? null;
+        $catSource = $product['marketplace_category_source'] ?? null;
+        $sourceCategory = $offer['source_category'] ?? null;
+        ?>
+        <div class="small text-body-secondary mb-2">
+            Fornecedor: <?= esc($sourceCategory ?: '—') ?>
+            · MLB atual: <?= $catId ? '<code>' . esc($catId) . '</code> ' . esc((string) $catName) : 'não confirmada' ?>
+            <?php if ($catSource): ?> · origem <code><?= esc($catSource) ?></code><?php endif ?>
+        </div>
+        <?php if (! empty($suggestions)): ?>
+            <div class="table-responsive mb-3">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>Sugestão (API)</th><th>Domínio</th><th></th></tr></thead>
+                    <tbody>
+                    <?php foreach ($suggestions as $suggestion): ?>
+                        <tr>
+                            <td>
+                                <code><?= esc($suggestion['category_id'] ?? '') ?></code>
+                                <?= esc($suggestion['category_name'] ?? '') ?>
+                            </td>
+                            <td class="small text-body-secondary"><?= esc($suggestion['domain_name'] ?? $suggestion['domain_id'] ?? '') ?></td>
+                            <td class="text-end">
+                                <form method="post" action="<?= site_url('profitability/' . $analysis['product_id'] . '/category') ?>" class="d-inline">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="category_id" value="<?= esc($suggestion['category_id'] ?? '', 'attr') ?>">
+                                    <input type="hidden" name="remember_mapping" value="1">
+                                    <input type="hidden" name="origin" value="confirmed">
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">Confirmar</button>
+                                </form>
+                            </td>
+                        </tr>
+                    <?php endforeach ?>
+                    </tbody>
+                </table>
+            </div>
+            <div class="form-text mb-3">Sugestões via <code>domain_discovery/search</code>. Nada é aplicado automaticamente.</div>
+        <?php else: ?>
+            <p class="small text-body-secondary">Sem sugestões no momento (conta ausente, título curto ou preditor sem retorno).</p>
+        <?php endif ?>
+        <form method="post" action="<?= site_url('profitability/' . $analysis['product_id'] . '/category') ?>" class="row g-2 align-items-end">
+            <?= csrf_field() ?>
+            <div class="col-md-5">
+                <label class="form-label" for="category_id_manual">ID MLB manual</label>
+                <input type="text" class="form-control form-control-sm" id="category_id_manual" name="category_id" placeholder="MLB123456" required pattern="[A-Za-z]{3}[0-9]+">
+            </div>
+            <div class="col-md-4">
+                <div class="form-check mt-4">
+                    <input type="hidden" name="remember_mapping" value="0">
+                    <input class="form-check-input" type="checkbox" value="1" id="remember_mapping" name="remember_mapping" checked>
+                    <label class="form-check-label small" for="remember_mapping">Reutilizar na categoria do fornecedor</label>
+                </div>
+                <input type="hidden" name="origin" value="manual">
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-sm btn-primary w-100">Validar e confirmar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div class="row g-3">
     <div class="col-lg-7">
         <div class="card mb-3">
@@ -117,6 +182,17 @@ $reasons = json_decode((string) ($analysis['block_reasons'] ?? '[]'), true) ?: (
                 </div>
                 <?php if (! empty($quotes['shipping']['reason'])): ?>
                     <div class="small text-body-secondary mt-3">Frete: <?= esc($quotes['shipping']['reliability'] ?? '') ?> — <?= esc($quotes['shipping']['reason']) ?></div>
+                <?php endif ?>
+                <?php if (! empty($quotes['logistics']['reason'])): ?>
+                    <div class="small text-body-secondary mt-1">
+                        Logística: <code><?= esc(($quotes['logistics']['shipping_mode'] ?? '—') . '/' . ($quotes['logistics']['logistic_type'] ?? '—')) ?></code>
+                        · <?= esc($quotes['logistics']['source'] ?? '') ?>
+                        — <?= esc($quotes['logistics']['reason']) ?>
+                        · <a href="<?= site_url('profitability/logistics') ?>">ajustar</a>
+                    </div>
+                <?php endif ?>
+                <?php if (! empty($quotes['quoted_at'])): ?>
+                    <div class="small text-body-secondary mt-1">Consulta de tarifas: <?= esc($quotes['quoted_at']) ?></div>
                 <?php endif ?>
             </div>
         </div>

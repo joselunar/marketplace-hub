@@ -26,6 +26,7 @@ class SystemSettings extends BaseConfig
         'profitability' => 'Rentabilidade',
         'fixed_costs'   => 'Custos fixos (planejamento)',
         'dropify'       => 'Dropify',
+        'meli'          => 'Mercado Livre (logística)',
     ];
 
     /**
@@ -304,6 +305,22 @@ class SystemSettings extends BaseConfig
             'label'   => 'Exigir checklist logístico Dropify para publicar',
             'default' => true,
             'rules'   => 'permit_empty|in_list[0,1]',
+        ],
+        'meli.shipping_mode' => [
+            'group'   => 'meli',
+            'type'    => 'string',
+            'label'   => 'Modo de envio (shipping mode)',
+            'default' => '',
+            'rules'   => 'permit_empty|max_length[40]|regex_match[/^[a-z0-9_]*$/]',
+            'help'    => 'Ex.: me2. Deixe vazio para usar .env ou o default único das preferências da conta. Não invente valores — confirme em Rentabilidade → Logística ML.',
+        ],
+        'meli.logistic_type' => [
+            'group'   => 'meli',
+            'type'    => 'string',
+            'label'   => 'Tipo logístico',
+            'default' => '',
+            'rules'   => 'permit_empty|max_length[40]|regex_match[/^[a-z0-9_]*$/]',
+            'help'    => 'Ex.: drop_off, cross_docking, xd_drop_off. Só preencha com opções ativas da conta.',
         ],
         'fixed_costs.dropify_monthly' => [
             'group'   => 'fixed_costs',

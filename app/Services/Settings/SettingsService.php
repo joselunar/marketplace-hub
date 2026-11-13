@@ -148,6 +148,71 @@ class SettingsService
     }
 
     /**
+     * Atualiza apenas as chaves informadas (sem zerar as demais).
+     *
+     * @param array<string, mixed> $input
+     *
+     * @return list<string>
+     */
+    public function putMany(array $input, ?int $userId = null): array
+    {
+        $definitions = $this->config->definitions;
+        $data        = [];
+        $rules       = [];
+
+        foreach ($input as $key => $raw) {
+            if (! isset($definitions[$key])) {
+                throw new ValidationException([$key => 'Configuração desconhecida.']);
+            }
+            $definition = $definitions[$key];
+            $field      = $this->fieldName($key);
+            $value      = $raw;
+
+            if ($definition['type'] === 'bool') {
+                $value = ! empty($value) ? '1' : '0';
+            } elseif ($definition['type'] === 'decimal') {
+                $value = Decimal::normalize($value) ?? (is_scalar($value) ? (string) $value : '');
+            } else {
+                $value = is_scalar($value) ? trim((string) $value) : '';
+            }
+
+            $data[$field]  = $value;
+            $rules[$field] = ['label' => $definition['label'], 'rules' => $definition['rules']];
+        }
+
+        $validation = service('validation');
+        $validation->reset()->setRules($rules);
+        if (! $validation->run($data)) {
+            $errors = [];
+            foreach ($validation->getErrors() as $field => $message) {
+                $errors[$this->keyFromField($field)] = $message;
+            }
+            throw new ValidationException($errors);
+        }
+
+        $current = $this->all();
+        $db      = $this->model->db;
+        $db->transException(true)->transStart();
+        foreach ($input as $key => $_) {
+            $this->persist($key, $definitions[$key], $data[$this->fieldName($key)], $userId);
+        }
+        $db->transComplete();
+
+        $this->cache = null;
+        $updated     = $this->all();
+        $this->audit()->log('update', 'settings', null, $current, $updated, $userId);
+
+        $changed = [];
+        foreach (array_keys($input) as $key) {
+            if (! array_key_exists($key, $current) || $current[$key] !== $updated[$key]) {
+                $changed[] = $key;
+            }
+        }
+
+        return $changed;
+    }
+
+    /**
      * Cria as chaves ausentes com o valor padrão (usado pelo seeder).
      */
     public function seedDefaults(): int

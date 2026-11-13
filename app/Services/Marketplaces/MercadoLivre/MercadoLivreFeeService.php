@@ -41,8 +41,15 @@ class MercadoLivreFeeService
         $this->calculator = $calculator ?? new PriceCalculator();
     }
 
-    public function quote(array $account, string $categoryId, string $listingTypeId, string $price, string $currencyId): ListingFee
-    {
+    public function quote(
+        array $account,
+        string $categoryId,
+        string $listingTypeId,
+        string $price,
+        string $currencyId,
+        ?string $logisticType = null,
+        ?string $shippingMode = null,
+    ): ListingFee {
         $site   = $this->meli->siteFor($account);
         $config = $this->meli->config();
         $query  = array_filter([
@@ -50,8 +57,8 @@ class MercadoLivreFeeService
             'category_id'     => $categoryId,
             'listing_type_id' => $listingTypeId,
             'currency_id'     => $currencyId,
-            'logistic_type'   => $config->logisticType,
-            'shipping_mode'   => $config->shippingMode,
+            'logistic_type'   => trim((string) ($logisticType ?? $config->logisticType)),
+            'shipping_mode'   => trim((string) ($shippingMode ?? $config->shippingMode)),
         ], static fn (string $value): bool => $value !== '');
 
         $key    = 'meli_fee_' . md5($site . '|' . http_build_query($query));

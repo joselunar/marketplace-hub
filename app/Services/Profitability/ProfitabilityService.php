@@ -72,7 +72,24 @@ class ProfitabilityService
             'length_cm'    => $offer['length_cm'] ?? $product['length'] ?? null,
         ];
 
-        $quotes = $this->mlCosts->quote($context, $salePrice);
+        $categoryService = new ProfitabilityCategoryService();
+        $mlAccount       = $categoryService->resolveAccount();
+        // Aplica mapeamento confirmado do fornecedor no contexto do produto, se ainda não houver.
+        if (empty($context['marketplace_category_id']) || ! in_array((string) ($context['marketplace_category_source'] ?? ''), ProfitabilityCategoryService::CONFIRMED_SOURCES, true)) {
+            $resolved = $categoryService->resolvedCategoryId($product, $offer, $mlAccount);
+            if ($resolved !== null) {
+                $context['marketplace_category_id']     = $resolved;
+                $context['marketplace_category_source'] = ProfitabilityCategoryService::SOURCE_MAPPING;
+            }
+        }
+
+        $quotes = $this->mlCosts->quote(
+            $context,
+            $salePrice,
+            null,
+            $mlAccount !== null ? (int) $mlAccount['id'] : null,
+            $offer,
+        );
         $fee    = $this->mlCosts->bestFee($quotes);
         $ship   = $quotes['shipping'];
 
@@ -199,6 +216,97 @@ class ProfitabilityService
             ->findAll($limit);
     }
 
+    /**
+     * Confirma categoria MLB e recalcula o produto (e irmãos do mesmo source_category).
+     *
+     * @return array{product: array, recalculated: int}
+     */
+    public function confirmCategory(
+        int $productId,
+        string $categoryId,
+        ?int $userId,
+        bool $rememberMapping = true,
+        string $origin = ProfitabilityCategoryService::SOURCE_CONFIRMED,
+    ): array {
+        $categories = new ProfitabilityCategoryService();
+        $product    = $categories->confirm($productId, $categoryId, $userId, $rememberMapping, $origin);
+        $this->analyzeProduct($productId, $userId, 'category_confirm');
+
+        $recalculated = 1;
+        $offer = $this->offers->where('product_id', $productId)->orderBy('id', 'DESC')->first();
+        $sourceCategory = trim((string) ($offer['source_category'] ?? ''));
+        $provider = (string) ($product['source_provider'] ?? DropifyImportService::PROVIDER);
+
+        if ($rememberMapping && $sourceCategory !== '') {
+            foreach ($categories->productIdsForSourceCategory($provider, $sourceCategory) as $otherId) {
+                if ($otherId === $productId) {
+                    continue;
+                }
+                $sibling = $this->products->find($otherId);
+                if ($sibling === null) {
+                    continue;
+                }
+                $this->products->update($otherId, [
+                    'marketplace_category_id'           => $product['marketplace_category_id'],
+                    'marketplace_category_name'         => $product['marketplace_category_name'],
+                    'marketplace_category_source'       => ProfitabilityCategoryService::SOURCE_MAPPING,
+                    'marketplace_category_confirmed_at' => date('Y-m-d H:i:s'),
+                ]);
+                $this->analyzeProduct($otherId, $userId, 'category_mapping');
+                $recalculated++;
+            }
+        }
+
+        return ['product' => $product, 'recalculated' => $recalculated];
+    }
+
+    /**
+     * Grava mode/logistic_type escolhidos entre as opções reais da conta e recalcula.
+     *
+     * @return array{recalculated: int}
+     */
+    public function confirmLogistics(string $shippingMode, string $logisticType, ?int $userId): array
+    {
+        $shippingMode = trim($shippingMode);
+        $logisticType = trim($logisticType);
+        if ($shippingMode === '' || $logisticType === '') {
+            throw new BusinessRuleException('Informe mode e tipo logístico.');
+        }
+
+        $categories = new ProfitabilityCategoryService();
+        $account    = $categories->resolveAccount();
+        if ($account === null) {
+            throw new BusinessRuleException('Nenhuma conta Mercado Livre conectada.');
+        }
+
+        $logistics = new \App\Services\Marketplaces\MercadoLivre\MercadoLivreLogisticsService();
+        $context   = $logistics->resolveQuoteContext($account);
+        $allowed   = false;
+        foreach ($context['options'] as $option) {
+            if ($option['mode'] === $shippingMode && $option['type'] === $logisticType) {
+                $allowed = true;
+                break;
+            }
+        }
+        if (! $allowed && $context['options'] !== []) {
+            throw new BusinessRuleException('A combinação mode/tipo não está entre as preferências ativas da conta.');
+        }
+
+        $settings = $this->settings ?? service('settings');
+        $settings->putMany([
+            'meli.shipping_mode' => $shippingMode,
+            'meli.logistic_type' => $logisticType,
+        ], $userId);
+
+        $recalculated = 0;
+        foreach ($this->analyses->findAll() as $row) {
+            $this->analyzeProduct((int) $row['product_id'], $userId, 'logistics_confirm');
+            $recalculated++;
+        }
+
+        return ['recalculated' => $recalculated];
+    }
+
     private function monthlyFixedCosts(SettingsService $settings): string
     {
         $total = '0.00';
@@ -259,6 +367,13 @@ class ProfitabilityService
                 'classic'     => $quotes['classic'] ?? null,
                 'premium'     => $quotes['premium'] ?? null,
                 'shipping'    => $quotes['shipping'] ?? null,
+                'logistics'   => $quotes['logistics'] ?? null,
+                'quoted_at'   => $quotes['quoted_at'] ?? null,
+            ],
+            'category' => [
+                'id'     => $product['marketplace_category_id'] ?? ($quotes['category_id'] ?? null),
+                'name'   => $product['marketplace_category_name'] ?? null,
+                'source' => $product['marketplace_category_source'] ?? null,
             ],
             'fixed_costs_note' => 'Custos fixos são parâmetros de planejamento (não vêm da API).',
             'vps_shared'       => ($this->settings ?? service('settings'))->getBool('fixed_costs.vps_shared'),

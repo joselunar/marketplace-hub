@@ -34,6 +34,7 @@ $badge = static function (string $classification): string {
 <div class="d-flex flex-wrap gap-2 mb-3">
     <a href="<?= site_url('imports/dropify') ?>" class="btn btn-sm btn-success"><i class="bi bi-cloud-upload me-1"></i>Importar Dropify</a>
     <a href="<?= site_url('profitability/checklist') ?>" class="btn btn-sm btn-outline-secondary"><i class="bi bi-clipboard-check me-1"></i>Checklist Dropify</a>
+    <a href="<?= site_url('profitability/logistics') ?>" class="btn btn-sm btn-outline-secondary"><i class="bi bi-geo me-1"></i>Logística ML</a>
 </div>
 
 <div class="card filters-card mb-3">

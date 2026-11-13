@@ -183,9 +183,12 @@ $reasons = json_decode((string) ($analysis['block_reasons'] ?? '[]'), true) ?: (
                 <?php if (! empty($quotes['shipping']['reason'])): ?>
                     <div class="small text-body-secondary mt-3">Frete: <?= esc($quotes['shipping']['reliability'] ?? '') ?> — <?= esc($quotes['shipping']['reason']) ?></div>
                 <?php endif ?>
+                <?php if (! empty($quotes['shipping']['origin']['note'])): ?>
+                    <div class="small text-body-secondary mt-1">Origem física: <?= esc($quotes['shipping']['origin']['note']) ?></div>
+                <?php endif ?>
                 <?php if (! empty($quotes['logistics']['reason'])): ?>
                     <div class="small text-body-secondary mt-1">
-                        Logística: <code><?= esc(($quotes['logistics']['shipping_mode'] ?? '—') . '/' . ($quotes['logistics']['logistic_type'] ?? '—')) ?></code>
+                        Logística da conta: <code><?= esc(($quotes['logistics']['shipping_mode'] ?? '—') . '/' . ($quotes['logistics']['logistic_type'] ?? '—')) ?></code>
                         · <?= esc($quotes['logistics']['source'] ?? '') ?>
                         — <?= esc($quotes['logistics']['reason']) ?>
                         · <a href="<?= site_url('profitability/logistics') ?>">ajustar</a>
@@ -193,6 +196,14 @@ $reasons = json_decode((string) ($analysis['block_reasons'] ?? '[]'), true) ?: (
                 <?php endif ?>
                 <?php if (! empty($quotes['quoted_at'])): ?>
                     <div class="small text-body-secondary mt-1">Consulta de tarifas: <?= esc($quotes['quoted_at']) ?></div>
+                <?php endif ?>
+                <?php if (isset($breakdown['indicative_margin_pct'])): ?>
+                    <div class="small mt-2">
+                        Margem indicativa (estimados incluídos):
+                        <strong><?= percent_format($breakdown['indicative_margin_pct'], 2) ?></strong>
+                        (<?= money($breakdown['indicative_margin'] ?? null) ?>)
+                        — não libera publicação.
+                    </div>
                 <?php endif ?>
             </div>
         </div>

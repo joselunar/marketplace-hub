@@ -57,9 +57,10 @@ class MercadoLivreCostReader
         $premium = null;
         $quotedAt = date('Y-m-d H:i:s');
 
+        $billableWeight = $this->weightGrams($product);
         if ($account !== null && $categoryId !== null) {
-            $classic = $this->feeQuote($account, $categoryId, self::TYPE_CLASSIC, $salePrice, $logistics, $quotedAt);
-            $premium = $this->feeQuote($account, $categoryId, self::TYPE_PREMIUM, $salePrice, $logistics, $quotedAt);
+            $classic = $this->feeQuote($account, $categoryId, self::TYPE_CLASSIC, $salePrice, $logistics, $quotedAt, $billableWeight);
+            $premium = $this->feeQuote($account, $categoryId, self::TYPE_PREMIUM, $salePrice, $logistics, $quotedAt, $billableWeight);
         }
 
         return [
@@ -85,13 +86,18 @@ class MercadoLivreCostReader
      */
     public function bestFee(array $quotes): array
     {
-        foreach (['classic', 'premium'] as $key) {
-            $row = $quotes[$key] ?? null;
-            if (is_array($row) && ($row['reliability'] ?? '') === CostLine::CONFIRMED) {
+        foreach ([CostLine::CONFIRMED, CostLine::ESTIMATED] as $wanted) {
+            foreach (['classic', 'premium'] as $key) {
+                $row = $quotes[$key] ?? null;
+                if (! is_array($row) || ($row['reliability'] ?? '') !== $wanted || ($row['sale_fee_amount'] ?? null) === null) {
+                    continue;
+                }
+
                 return [
                     'amount'       => $row['sale_fee_amount'],
-                    'reliability'  => CostLine::CONFIRMED,
-                    'reason'       => 'sale_fee_amount de GET /sites/{site}/listing_prices (' . $row['listing_type_id'] . ') em ' . ($row['quoted_at'] ?? '') . '. Tarifa fixa não somada de novo.',
+                    'reliability'  => $wanted,
+                    'reason'       => ($row['reason'] ?? ('sale_fee_amount de listing_prices (' . $row['listing_type_id'] . ')'))
+                        . ' Consulta em ' . ($row['quoted_at'] ?? '') . '.',
                     'listing_type' => $row['listing_type_id'],
                     'details'      => $row,
                 ];
@@ -137,8 +143,15 @@ class MercadoLivreCostReader
      *
      * @return array<string, mixed>|null
      */
-    private function feeQuote(array $account, string $categoryId, string $listingTypeId, string $price, array $logistics, string $quotedAt): ?array
-    {
+    private function feeQuote(
+        array $account,
+        string $categoryId,
+        string $listingTypeId,
+        string $price,
+        array $logistics,
+        string $quotedAt,
+        ?int $billableWeightGrams = null,
+    ): ?array {
         try {
             $fee = ($this->fees ?? new MercadoLivreFeeService())->quote(
                 $account,
@@ -148,14 +161,20 @@ class MercadoLivreCostReader
                 'BRL',
                 is_string($logistics['logistic_type'] ?? null) ? $logistics['logistic_type'] : null,
                 is_string($logistics['shipping_mode'] ?? null) ? $logistics['shipping_mode'] : null,
+                $billableWeightGrams,
             );
 
             $row = $this->feeToArray($fee);
             $row['quoted_at'] = $quotedAt;
+            $row['billable_weight'] = $billableWeightGrams;
             if (! ($logistics['ready'] ?? false)) {
-                $row['reason'] .= ' Consulta sem logistic_type/mode confirmados (parâmetros opcionais omitidos).';
+                $row['reason'] .= ' Consulta sem logistic_type/mode confirmados — fixed_fee pode divergir do cobrado na venda.';
+                $row['reliability'] = CostLine::ESTIMATED;
             } else {
-                $row['reason'] .= ' logistic_type=' . $logistics['logistic_type'] . ', shipping_mode=' . $logistics['shipping_mode'] . ' (origem: ' . ($logistics['source'] ?? '') . ').';
+                $row['reason'] .= ' logistic_type=' . $logistics['logistic_type']
+                    . ', shipping_mode=' . $logistics['shipping_mode']
+                    . ($billableWeightGrams ? ', billable_weight=' . $billableWeightGrams . 'g' : '')
+                    . ' (origem logística: ' . ($logistics['source'] ?? '') . ').';
             }
 
             return $row;
@@ -188,23 +207,26 @@ class MercadoLivreCostReader
             'fixed_fee'          => $fee->fixedFee,
             'listing_fee_amount' => $fee->listingFeeAmount,
             'reliability'        => CostLine::CONFIRMED,
-            'reason'             => 'sale_fee_amount oficial; fixed_fee já incluso no total.',
+            'reason'             => 'sale_fee_amount oficial (total por vender); fixed_fee em sale_fee_details já incluso — não somado de novo.',
         ];
     }
 
     /**
      * @param array<string, mixed> $logistics
      *
-     * @return array{amount: ?string, reliability: string, reason: string, raw: mixed}
+     * @return array{amount: ?string, reliability: string, reason: string, raw: mixed, origin: array}
      */
     private function shippingQuote(?array $account, array $product, string $salePrice, ?string $categoryId, array $logistics): array
     {
+        $originMeta = $this->originMeta($product);
+
         if ($account === null) {
             return [
                 'amount'      => null,
                 'reliability' => CostLine::UNKNOWN,
                 'reason'      => 'Conta ML indisponível para cotar frete do vendedor.',
                 'raw'         => null,
+                'origin'      => $originMeta,
             ];
         }
 
@@ -221,6 +243,7 @@ class MercadoLivreCostReader
                 'reliability' => CostLine::UNKNOWN,
                 'reason'      => 'Peso e dimensões incompletos; sem eles a cotação de frete do vendedor não é confiável.',
                 'raw'         => null,
+                'origin'      => $originMeta,
             ];
         }
 
@@ -230,13 +253,14 @@ class MercadoLivreCostReader
                 'reliability' => CostLine::UNKNOWN,
                 'reason'      => (string) ($logistics['reason'] ?? 'Mode/logistic_type não confirmados para cotar frete.'),
                 'raw'         => ['options' => $logistics['options'] ?? []],
+                'origin'      => $originMeta,
             ];
         }
 
         try {
             $meli = $this->meli ?? service('mercadoLivre');
             $path = '/users/' . rawurlencode((string) $account['external_user_id']) . '/shipping_options/free';
-            $query = array_filter([
+            $baseQuery = array_filter([
                 'dimensions'      => sprintf('%dx%dx%d,%d', (int) ceil((float) $dims['height']), (int) ceil((float) $dims['width']), (int) ceil((float) $dims['length']), $weightGrams),
                 'item_price'      => Decimal::round($salePrice, 2),
                 'listing_type_id' => self::TYPE_CLASSIC,
@@ -244,28 +268,58 @@ class MercadoLivreCostReader
                 'logistic_type'   => (string) $logistics['logistic_type'],
                 'condition'       => 'new',
                 'verbose'         => 'true',
+                'zip_code'        => $originMeta['zip_code'] ?? '',
             ], static fn ($v) => $v !== null && $v !== '');
 
             if ($categoryId !== null) {
-                $query['category_id'] = $categoryId;
+                $baseQuery['category_id'] = $categoryId;
             }
 
-            $response = $meli->get((int) $account['id'], $path, $query);
-            $parsed   = $this->parseShippingCost($response);
-            if ($parsed !== null) {
+            // Doc oficial: enviar free_shipping true/false para a resposta correta do custo.
+            $withFree = $meli->get((int) $account['id'], $path, $baseQuery + ['free_shipping' => 'true']);
+            $noFree   = $meli->get((int) $account['id'], $path, $baseQuery + ['free_shipping' => 'false']);
+
+            $listFree = $this->extractListCost($withFree);
+            $listPaid = $this->extractListCost($noFree);
+            $discount = $this->extractDiscount($withFree);
+
+            if ($listFree === null && $listPaid === null) {
                 return [
-                    'amount'      => $parsed,
-                    'reliability' => CostLine::CONFIRMED,
-                    'reason'      => 'Custo do vendedor (list_cost) de /users/{id}/shipping_options/free com mode=' . $logistics['shipping_mode'] . ' e logistic_type=' . $logistics['logistic_type'] . ' (origem: ' . ($logistics['source'] ?? '') . ').',
-                    'raw'         => $this->summarizeShipping($response),
+                    'amount'      => null,
+                    'reliability' => CostLine::UNKNOWN,
+                    'reason'      => 'A API de frete respondeu, mas sem list_cost interpretável. Custo líquido real do vendedor só aparece em /shipments/{id}/costs (senders[].cost) após envio.',
+                    'raw'         => [
+                        'free_shipping_true'  => $this->summarizeShipping($withFree),
+                        'free_shipping_false' => $this->summarizeShipping($noFree),
+                    ],
+                    'origin'      => $originMeta,
                 ];
             }
 
+            // Hipótese operacional de dropshipping: anúncio com frete grátis ao comprador.
+            // list_cost com free_shipping=true é o "custo de envio oferecido ao vendedor" (estimativa),
+            // não o valor líquido conciliado pós-envio.
+            $amount = $listFree ?? $listPaid;
+            $reason = 'Estimativa oficial GET /users/{id}/shipping_options/free'
+                . ' (list_cost com free_shipping=' . ($listFree !== null ? 'true' : 'false') . ').'
+                . ' Mode=' . $logistics['shipping_mode'] . ', logistic_type=' . $logistics['logistic_type']
+                . ', conta VITRINEHUB; ' . $originMeta['note']
+                . ' Não é custo líquido confirmado (isso exige senders[].cost do envio real).'
+                . ($listFree !== null && $listPaid !== null ? ' Comparativo sem frete grátis: R$ ' . $listPaid . '.' : '')
+                . ($discount !== null ? ' Desconto na simulação: ' . json_encode($discount, JSON_UNESCAPED_UNICODE) . '.' : '');
+
             return [
-                'amount'      => null,
-                'reliability' => CostLine::UNKNOWN,
-                'reason'      => 'A API de frete respondeu, mas não foi possível determinar com segurança a parcela paga pelo vendedor antes de um anúncio/envio real (frete_indeterminado).',
-                'raw'         => $this->summarizeShipping($response),
+                'amount'      => $amount,
+                'reliability' => CostLine::ESTIMATED,
+                'reason'      => $reason,
+                'raw'         => [
+                    'list_cost_free_shipping' => $listFree,
+                    'list_cost_buyer_pays'    => $listPaid,
+                    'discount'                => $discount,
+                    'free_shipping_true'      => $this->summarizeShipping($withFree),
+                    'free_shipping_false'     => $this->summarizeShipping($noFree),
+                ],
+                'origin'      => $originMeta,
             ];
         } catch (MercadoLivreApiException $e) {
             return [
@@ -273,6 +327,7 @@ class MercadoLivreCostReader
                 'reliability' => CostLine::UNKNOWN,
                 'reason'      => 'Falha na cotação de frete: ' . $e->userMessage(),
                 'raw'         => null,
+                'origin'      => $originMeta,
             ];
         } catch (Throwable $e) {
             return [
@@ -280,11 +335,39 @@ class MercadoLivreCostReader
                 'reliability' => CostLine::UNKNOWN,
                 'reason'      => 'Falha na cotação de frete: ' . $e->getMessage(),
                 'raw'         => null,
+                'origin'      => $originMeta,
             ];
         }
     }
 
-    private function parseShippingCost(array $response): ?string
+    /**
+     * @return array{uf: ?string, zip_code: ?string, note: string}
+     */
+    private function originMeta(array $product): array
+    {
+        $uf  = isset($product['origin_uf']) && is_string($product['origin_uf']) && $product['origin_uf'] !== ''
+            ? strtoupper($product['origin_uf'])
+            : null;
+        $zip = null;
+        foreach (['origin_postal_code', 'zip_code'] as $key) {
+            if (! empty($product[$key]) && preg_match('/^\d{8}$/', preg_replace('/\D+/', '', (string) $product[$key]) ?? '')) {
+                $zip = preg_replace('/\D+/', '', (string) $product[$key]);
+                break;
+            }
+        }
+
+        if ($zip !== null) {
+            $note = 'CEP de origem do fornecedor Dropify informado (' . ($uf ? $uf . '/' : '') . $zip . '); distinto do endereço cadastral da conta VITRINEHUB.';
+        } elseif ($uf !== null) {
+            $note = 'UF de origem do fornecedor=' . $uf . ', sem CEP no catálogo — a cotação pode usar o endereço da conta VITRINEHUB e divergir da origem física Dropify.';
+        } else {
+            $note = 'Sem CEP/UF do fornecedor — cotação usa contexto da conta VITRINEHUB, não a origem física Dropify.';
+        }
+
+        return ['uf' => $uf, 'zip_code' => $zip, 'note' => $note];
+    }
+
+    private function extractListCost(array $response): ?string
     {
         $coverage = $response['coverage'] ?? null;
         if (is_array($coverage) && isset($coverage['all_country']['list_cost']) && is_numeric($coverage['all_country']['list_cost'])) {
@@ -305,6 +388,13 @@ class MercadoLivreCostReader
         return null;
     }
 
+    private function extractDiscount(array $response): ?array
+    {
+        $discount = $response['coverage']['all_country']['discount'] ?? ($response['coverage']['discount'] ?? null);
+
+        return is_array($discount) ? $discount : null;
+    }
+
     private function summarizeShipping(array $response): array
     {
         $options = [];
@@ -322,9 +412,9 @@ class MercadoLivreCostReader
         }
 
         return [
-            'keys'      => array_slice(array_keys($response), 0, 20),
-            'options'   => $options,
-            'coverage'  => $response['coverage']['all_country'] ?? null,
+            'keys'     => array_slice(array_keys($response), 0, 20),
+            'options'  => $options,
+            'coverage' => $response['coverage']['all_country'] ?? null,
         ];
     }
 

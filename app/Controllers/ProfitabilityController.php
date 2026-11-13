@@ -140,6 +140,24 @@ class ProfitabilityController extends BaseController
         );
     }
 
+    public function ranking(): string|RedirectResponse
+    {
+        if (! $this->service()->enabled()) {
+            return redirect()->to('dashboard')->with('error', 'O módulo de rentabilidade está desativado nas configurações.');
+        }
+
+        $filters = $this->filters(['q', 'supplier_id', 'classification', 'min_indicative', 'only_with_fee']);
+
+        return view('profitability/ranking', [
+            'title'       => 'Ranking de oportunidades',
+            'rows'        => $this->service()->ranking($filters, 200),
+            'filters'     => $filters,
+            'labels'      => ProfitabilityResult::LABELS,
+            'suppliers'   => (new SupplierModel())->dropdownOptions(),
+            'breadcrumbs' => ['Rentabilidade' => 'profitability', 'Ranking' => null],
+        ]);
+    }
+
     public function logistics(): string|RedirectResponse
     {
         $catSvc  = new ProfitabilityCategoryService();

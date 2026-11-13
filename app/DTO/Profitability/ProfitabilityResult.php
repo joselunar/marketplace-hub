@@ -41,6 +41,8 @@ final readonly class ProfitabilityResult
         public array $unknownEssential,
         public string $fixedCostPerUnit,
         public string $monthlyFixedCosts,
+        public string $indicativeMargin = '0.00',
+        public string $indicativeMarginPct = '0.00',
     ) {
     }
 
@@ -77,6 +79,8 @@ final readonly class ProfitabilityResult
             'lines'                       => array_map(static fn (CostLine $l): array => $l->toArray(), $this->lines),
             'block_reasons'               => $this->blockReasons,
             'unknown_essential'           => $this->unknownEssential,
+            'indicative_margin'           => $this->indicativeMargin,
+            'indicative_margin_pct'       => $this->indicativeMarginPct,
             'publishable'                 => $this->isPublishable(),
         ];
     }

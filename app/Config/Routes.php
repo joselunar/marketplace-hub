@@ -76,6 +76,7 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
         $routes->post('checklist/(:num)', 'ProfitabilityController::updateChecklist/$1');
         $routes->get('logistics', 'ProfitabilityController::logistics');
         $routes->post('logistics', 'ProfitabilityController::confirmLogistics');
+        $routes->get('ranking', 'ProfitabilityController::ranking');
         $routes->get('(:num)', 'ProfitabilityController::show/$1');
         $routes->post('(:num)/recalculate', 'ProfitabilityController::recalculate/$1');
         $routes->post('(:num)/simulate', 'ProfitabilityController::simulate/$1');

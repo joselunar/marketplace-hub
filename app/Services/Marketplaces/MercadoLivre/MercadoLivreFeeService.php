@@ -49,9 +49,12 @@ class MercadoLivreFeeService
         string $currencyId,
         ?string $logisticType = null,
         ?string $shippingMode = null,
+        ?int $billableWeightGrams = null,
     ): ListingFee {
         $site   = $this->meli->siteFor($account);
         $config = $this->meli->config();
+        // sale_fee_amount já é o total por vender (inclui fixed_fee). Não somar de novo.
+        // logistic_type/shipping_mode/billable_weight afetam o fixed_fee na estrutura atual do ML.
         $query  = array_filter([
             'price'           => Decimal::round($price, 2),
             'category_id'     => $categoryId,
@@ -59,6 +62,9 @@ class MercadoLivreFeeService
             'currency_id'     => $currencyId,
             'logistic_type'   => trim((string) ($logisticType ?? $config->logisticType)),
             'shipping_mode'   => trim((string) ($shippingMode ?? $config->shippingMode)),
+            'billable_weight' => $billableWeightGrams !== null && $billableWeightGrams > 0
+                ? (string) $billableWeightGrams
+                : '',
         ], static fn (string $value): bool => $value !== '');
 
         $key    = 'meli_fee_' . md5($site . '|' . http_build_query($query));

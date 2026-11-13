@@ -31,7 +31,8 @@ class Navigation extends BaseConfig
                 ['label' => 'Categorias', 'icon' => 'diagram-3', 'url' => 'categories', 'prefix' => 'categories'],
                 ['label' => 'Ofertas de fornecedores', 'icon' => 'tags', 'url' => 'offers', 'prefix' => 'offers'],
                 ['label' => 'Simulador de preços', 'icon' => 'calculator', 'url' => 'pricing', 'prefix' => 'pricing'],
-                ['label' => 'Rentabilidade', 'icon' => 'graph-up-arrow', 'url' => 'profitability', 'prefix' => 'profitability', 'exclude' => 'profitability/checklist,profitability/logistics'],
+                ['label' => 'Rentabilidade', 'icon' => 'graph-up-arrow', 'url' => 'profitability', 'prefix' => 'profitability', 'exclude' => 'profitability/checklist,profitability/logistics,profitability/ranking'],
+                ['label' => 'Ranking oportunidades', 'icon' => 'trophy', 'url' => 'profitability/ranking', 'prefix' => 'profitability/ranking'],
             ],
         ],
         [

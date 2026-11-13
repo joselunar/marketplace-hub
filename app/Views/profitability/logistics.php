@@ -11,6 +11,11 @@ $prefs = is_array($context['preferences'] ?? null) ? $context['preferences'] : n
     Consulta somente leitura de <code>GET /users/{id}/shipping_preferences</code>.
     Mode e tipo logístico só entram no cálculo se vierem do .env, desta confirmação ou do único/default ativo da conta — nunca inventados.
 </p>
+<div class="alert alert-secondary small">
+    A conta <strong>VITRINEHUB</strong> define mode/logistic_type da cotação. A origem física dos produtos Dropify (UF/CEP do fornecedor)
+    é enviada quando existir no catálogo; sem CEP, a API tende a usar o endereço da conta e o frete estimado pode divergir da operação real de dropshipping.
+    O <code>list_cost</code> de <code>shipping_options/free</code> é tratado como <strong>estimado</strong>, não como custo líquido confirmado.
+</div>
 
 <?php if ($error): ?>
     <div class="alert alert-warning"><?= esc($error) ?></div>

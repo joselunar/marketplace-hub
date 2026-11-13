@@ -66,10 +66,12 @@ class ProfitabilityService
         }
 
         $context = $product + [
-            'weight_grams' => $offer['weight_grams'] ?? null,
-            'height_cm'    => $offer['height_cm'] ?? $product['height'] ?? null,
-            'width_cm'     => $offer['width_cm'] ?? $product['width'] ?? null,
-            'length_cm'    => $offer['length_cm'] ?? $product['length'] ?? null,
+            'weight_grams'        => $offer['weight_grams'] ?? null,
+            'height_cm'           => $offer['height_cm'] ?? $product['height'] ?? null,
+            'width_cm'            => $offer['width_cm'] ?? $product['width'] ?? null,
+            'length_cm'           => $offer['length_cm'] ?? $product['length'] ?? null,
+            'origin_uf'           => $offer['origin_uf'] ?? $product['origin_uf'] ?? null,
+            'origin_postal_code'   => $offer['origin_postal_code'] ?? null,
         ];
 
         $categoryService = new ProfitabilityCategoryService();
@@ -217,6 +219,67 @@ class ProfitabilityService
     }
 
     /**
+     * Ranking por margem indicativa (não promove estimados a rentável).
+     *
+     * @param array{q?: string, supplier_id?: string, classification?: string, min_indicative?: string, only_with_fee?: string} $filters
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function ranking(array $filters = [], int $limit = 100): array
+    {
+        $model = $this->analyses->withProduct();
+        $model->applyFilters($filters);
+
+        if (! empty($filters['min_indicative']) && is_numeric($filters['min_indicative'])) {
+            $model->where('profitability_analyses.indicative_margin_pct >=', $filters['min_indicative']);
+        }
+        if (($filters['only_with_fee'] ?? '') === '1') {
+            $model->where('profitability_analyses.marketplace_fee_total IS NOT NULL', null, false);
+        }
+
+        $rows = $model
+            ->orderBy('profitability_analyses.indicative_margin_pct', 'DESC')
+            ->orderBy('profitability_analyses.contribution_margin_pct', 'DESC')
+            ->findAll($limit);
+
+        foreach ($rows as &$row) {
+            $row['ranking_justification'] = $this->rankingJustification($row);
+        }
+        unset($row);
+
+        return $rows;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function rankingJustification(array $row): string
+    {
+        $parts = [];
+        $class = (string) ($row['classification'] ?? '');
+        if ($class === ProfitabilityResult::RENTAVEL) {
+            $parts[] = 'Classificação rentável com custos essenciais confirmados.';
+        } elseif ($class === ProfitabilityResult::AGUARDANDO_DADOS) {
+            $parts[] = 'Potencial indicativo apenas: frete ou tarifa ainda não confirmados para publicação.';
+        } elseif ($class === ProfitabilityResult::MARGEM_BAIXA) {
+            $parts[] = 'Custos confirmados, mas margem abaixo do mínimo configurado.';
+        } elseif ($class === ProfitabilityResult::PREJUIZO) {
+            $parts[] = 'Custos confirmados apontam prejuízo na contribuição.';
+        }
+
+        $feeSrc = (string) ($row['marketplace_fee_source'] ?? '');
+        $shipSrc = (string) ($row['seller_shipping_source'] ?? '');
+        $parts[] = 'Tarifa ML: ' . ($feeSrc !== '' ? $feeSrc : '—')
+            . ' (R$ ' . ($row['marketplace_fee_total'] ?? '—') . ').';
+        $parts[] = 'Frete vendedor: ' . ($shipSrc !== '' ? $shipSrc : '—')
+            . ' (R$ ' . ($row['seller_shipping_cost'] ?? '—') . ').';
+        $parts[] = 'Indicativa ' . ($row['indicative_margin_pct'] ?? '0') . '% / contribução oficial '
+            . ($row['contribution_margin_pct'] ?? '0') . '%.';
+
+        return implode(' ', $parts);
+    }
+
+    /**
      * Confirma categoria MLB e recalcula o produto (e irmãos do mesmo source_category).
      *
      * @return array{product: array, recalculated: int}
@@ -349,6 +412,8 @@ class ProfitabilityService
             unknownEssential: ['dados_basicos'],
             fixedCostPerUnit: '0.00',
             monthlyFixedCosts: '0.00',
+            indicativeMargin: '0.00',
+            indicativeMarginPct: '0.00',
         );
     }
 
@@ -412,6 +477,8 @@ class ProfitabilityService
             'quote_account_id'        => isset($quotes['account']['id']) ? (int) $quotes['account']['id'] : null,
             'quoted_at'               => date('Y-m-d H:i:s'),
             'calculation_source'      => $source,
+            'indicative_margin'       => $result->indicativeMargin,
+            'indicative_margin_pct'   => $result->indicativeMarginPct,
         ];
 
         $existing = $this->analyses->where('product_id', (int) $product['id'])->first();

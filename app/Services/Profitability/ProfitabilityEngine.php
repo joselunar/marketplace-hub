@@ -111,10 +111,22 @@ final class ProfitabilityEngine
         }
 
         $hasUnknownEssential = $unknown !== [];
-        $margin              = $hasUnknownEssential ? '0.00' : Decimal::round(bcsub($sale, $variableTotal, 4), 2);
-        $marginPct           = (! $hasUnknownEssential && bccomp($sale, '0', 2) > 0)
+        // Margem oficial (para classificação/publicação) só com essenciais confirmados.
+        $margin = $hasUnknownEssential ? '0.00' : Decimal::round(bcsub($sale, $variableTotal, 4), 2);
+        $marginPct = (! $hasUnknownEssential && bccomp($sale, '0', 2) > 0)
             ? Decimal::round(bcmul(bcdiv($margin, $sale, 6), '100', 6), 2)
             : '0.00';
+
+        // Margem indicativa: usa valores confirmados + estimados disponíveis.
+        // Nunca promove classificação a rentável se houver essencial só estimado.
+        $indicativeMargin = Decimal::round(bcsub($sale, $variableTotal, 4), 2);
+        $indicativeMarginPct = bccomp($sale, '0', 2) > 0
+            ? Decimal::round(bcmul(bcdiv($indicativeMargin, $sale, 6), '100', 6), 2)
+            : '0.00';
+        if ($feeAmount === null || ($shipAmount === null && $shipRel !== CostLine::CONFIRMED)) {
+            $indicativeMargin    = '0.00';
+            $indicativeMarginPct = '0.00';
+        }
 
         $units       = max(1, $input->monthlyUnitsAssumption);
         $fixedMonth  = Decimal::round($input->monthlyFixedCosts, 2);
@@ -143,7 +155,7 @@ final class ProfitabilityEngine
             marketplaceFeeReliability: $feeRel === CostLine::UNKNOWN ? CostLine::UNKNOWN : $feeRel,
             sellerShippingCost: $shipAmount,
             sellerShippingReliability: $shipRel === CostLine::UNKNOWN ? CostLine::UNKNOWN : $shipRel,
-            variableCostsTotal: $hasUnknownEssential ? Decimal::round($variableTotal, 2) : Decimal::round($variableTotal, 2),
+            variableCostsTotal: Decimal::round($variableTotal, 2),
             contributionMargin: $margin,
             contributionMarginPct: $marginPct,
             operatingResult: $operating,
@@ -155,6 +167,8 @@ final class ProfitabilityEngine
             unknownEssential: array_values(array_unique($unknown)),
             fixedCostPerUnit: $fixedUnit,
             monthlyFixedCosts: $fixedMonth,
+            indicativeMargin: $indicativeMargin,
+            indicativeMarginPct: $indicativeMarginPct,
         );
     }
 
@@ -205,7 +219,7 @@ final class ProfitabilityEngine
         if ($waiting) {
             $map = [
                 'tarifa_marketplace' => 'Tarifa do Mercado Livre ausente ou não confirmada.',
-                'frete_vendedor'     => 'Custo de frete/logística do vendedor ausente ou não confirmado.',
+                'frete_vendedor'     => 'Frete do vendedor ausente, estimado ou não confirmado (list_cost de simulação não equivale a custo líquido pós-envio).',
             ];
             foreach ($unknown as $code) {
                 $reasons[] = $map[$code] ?? ('Custo essencial desconhecido: ' . $code);

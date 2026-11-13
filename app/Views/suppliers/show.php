@@ -48,6 +48,75 @@
     </div>
 </div>
 
+<div class="card mb-3">
+    <div class="card-header bg-white fw-semibold">CEPs / centros de distribuição</div>
+    <div class="card-body">
+        <p class="small text-body-secondary">
+            Não assuma um único endereço para todos os SKUs. Cadastre CEPs confirmados por CD/fornecedor; use o detalhe comercial para sobrescrever por SKU.
+        </p>
+        <?php if (! empty($origins)): ?>
+            <div class="table-responsive mb-3">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>Rótulo</th><th>CEP</th><th>UF</th><th>Fonte</th><th>Evidência</th><th></th></tr></thead>
+                    <tbody>
+                    <?php foreach ($origins as $origin): ?>
+                        <tr class="<?= empty($origin['active']) ? 'table-secondary' : '' ?>">
+                            <td><?= esc($origin['label'] ?? '') ?></td>
+                            <td><code><?= esc($origin['postal_code'] ?? '') ?></code></td>
+                            <td><?= esc($origin['uf'] ?? '—') ?></td>
+                            <td class="small"><?= esc($sourceLabels[$origin['source_type'] ?? ''] ?? ($origin['source_type'] ?? '')) ?></td>
+                            <td class="small"><?= esc($origin['evidence_note'] ?? '—') ?></td>
+                            <td class="text-end">
+                                <?php if (! empty($origin['active'])): ?>
+                                    <form method="post" action="<?= site_url('suppliers/' . $supplier['id'] . '/origins/' . $origin['id'] . '/deactivate') ?>">
+                                        <?= csrf_field() ?>
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary">Desativar</button>
+                                    </form>
+                                <?php else: ?>
+                                    <span class="small text-body-secondary">inativo</span>
+                                <?php endif ?>
+                            </td>
+                        </tr>
+                    <?php endforeach ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php else: ?>
+            <p class="small text-body-secondary">Nenhum CEP cadastrado ainda.</p>
+        <?php endif ?>
+        <form method="post" action="<?= site_url('suppliers/' . $supplier['id'] . '/origins') ?>" class="row g-2 align-items-end">
+            <?= csrf_field() ?>
+            <div class="col-md-3">
+                <label class="form-label" for="label">Rótulo / CD</label>
+                <input type="text" class="form-control form-control-sm" id="label" name="label" maxlength="120" placeholder="CD São Paulo">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label" for="postal_code">CEP *</label>
+                <input type="text" class="form-control form-control-sm" id="postal_code" name="postal_code" required maxlength="12" inputmode="numeric">
+            </div>
+            <div class="col-md-1">
+                <label class="form-label" for="uf">UF</label>
+                <input type="text" class="form-control form-control-sm" id="uf" name="uf" maxlength="2" value="SP">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label" for="source_type">Origem *</label>
+                <select class="form-select form-select-sm" id="source_type" name="source_type" required>
+                    <?php foreach (($sourceLabels ?? []) as $value => $label): ?>
+                        <option value="<?= esc($value, 'attr') ?>" <?= $value === 'documental' ? 'selected' : '' ?>><?= esc($label) ?></option>
+                    <?php endforeach ?>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="evidence_note">Evidência</label>
+                <input type="text" class="form-control form-control-sm" id="evidence_note" name="evidence_note" maxlength="500" placeholder="Documento / e-mail / print">
+            </div>
+            <div class="col-md-1">
+                <button type="submit" class="btn btn-sm btn-primary w-100">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div class="row g-3">
     <div class="col-12 col-xl-5">
         <div class="card h-100">

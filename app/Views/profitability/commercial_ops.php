@@ -6,6 +6,8 @@ $product = $data['product'] ?? [];
 $unit = $sim['unit'] ?? [];
 $mei = $sim['mei'] ?? [];
 $assumptions = $sim['assumptions'] ?? [];
+$fixed = $sim['fixed_costs'] ?? [];
+$breakEven = $sim['break_even'] ?? [];
 $pid = (int) ($product['id'] ?? 0);
 $meiClass = match ($mei['level'] ?? 'ok') {
     'exceeded' => 'danger',
@@ -24,7 +26,13 @@ $meiClass = match ($mei['level'] ?? 'ok') {
 
 <?php if (! empty($cepPending)): ?>
     <div class="alert alert-warning">
-        Frete e capital de giro desta simulação herdam a última análise; CEP real Dropify/SP permanece pendente.
+        Frete desta simulação ainda é estimativo; CEP de expedição não confirmado. Resultado operacional não é lucro comprovado.
+    </div>
+<?php endif ?>
+
+<?php if (empty($fixed['das_configured'])): ?>
+    <div class="alert alert-warning">
+        <strong>DAS-MEI:</strong> está zerado nas configurações. Informe o valor mensal em Configurações → Custos fixos para o ponto de equilíbrio refletir essa despesa.
     </div>
 <?php endif ?>
 
@@ -70,26 +78,58 @@ $meiClass = match ($mei['level'] ?? 'ok') {
     </div>
     <div class="col-md-3">
         <div class="card h-100"><div class="card-body">
-            <div class="small text-body-secondary">Ponto de equilíbrio</div>
+            <div class="small text-body-secondary">PE — operação</div>
             <div class="fs-4">
-                <?= isset($sim['break_even_units']) ? ((int) $sim['break_even_units'] . ' vendas') : '—' ?>
+                <?= isset($breakEven['operation']) ? ((int) $breakEven['operation'] . ' vendas') : '—' ?>
             </div>
-            <div class="small">fixos mensais <?= money($assumptions['fixed_monthly'] ?? null) ?></div>
+            <div class="small">fixos operação <?= money($fixed['operation_total'] ?? $assumptions['fixed_operation'] ?? null) ?> (sem VPS compartilhada)</div>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100"><div class="card-body">
+            <div class="small text-body-secondary">PE — empresa</div>
+            <div class="fs-4">
+                <?= isset($breakEven['company']) ? ((int) $breakEven['company'] . ' vendas') : (isset($sim['break_even_units']) ? ((int) $sim['break_even_units'] . ' vendas') : '—') ?>
+            </div>
+            <div class="small">todos os fixos <?= money($fixed['company_total'] ?? $assumptions['fixed_monthly'] ?? null) ?></div>
         </div></div>
     </div>
     <div class="col-md-3">
         <div class="card h-100"><div class="card-body">
             <div class="small text-body-secondary">Capital / unidade</div>
             <div class="fs-4"><?= money($unit['working_capital_unit'] ?? null) ?></div>
-            <div class="small">custo de compra (giro antecipado)</div>
+            <div class="small">estoque fornecedor: <?= esc((string) ($sim['stock'] ?? '—')) ?></div>
         </div></div>
     </div>
-    <div class="col-md-3">
-        <div class="card h-100"><div class="card-body">
-            <div class="small text-body-secondary">Estoque fornecedor</div>
-            <div class="fs-4"><?= esc((string) ($sim['stock'] ?? '—')) ?></div>
-            <div class="small">não é demanda verificada</div>
-        </div></div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header bg-white fw-semibold">Custos fixos (sem duplicar linhas)</div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead><tr><th>Item</th><th>Tipo</th><th class="text-end">Valor</th></tr></thead>
+            <tbody>
+            <?php foreach ($fixed['lines'] ?? [] as $line): ?>
+                <tr>
+                    <td><?= esc($line['label'] ?? '') ?></td>
+                    <td class="small"><?= ($line['bucket'] ?? '') === 'shared' ? 'compartilhado' : 'operação' ?></td>
+                    <td class="text-end"><?= money($line['amount'] ?? null) ?></td>
+                </tr>
+            <?php endforeach ?>
+            <tr class="fw-semibold">
+                <td colspan="2">Total operação</td>
+                <td class="text-end"><?= money($fixed['operation_total'] ?? null) ?></td>
+            </tr>
+            <tr class="fw-semibold">
+                <td colspan="2">Total compartilhado</td>
+                <td class="text-end"><?= money($fixed['shared_total'] ?? null) ?></td>
+            </tr>
+            <tr class="fw-semibold table-light">
+                <td colspan="2">Total empresa</td>
+                <td class="text-end"><?= money($fixed['company_total'] ?? null) ?></td>
+            </tr>
+            </tbody>
+        </table>
     </div>
 </div>
 
@@ -103,8 +143,8 @@ $meiClass = match ($mei['level'] ?? 'ok') {
                 <th>Faturamento bruto</th>
                 <th>Custos variáveis</th>
                 <th>Margem de contribuição</th>
-                <th>Custos fixos</th>
-                <th>Resultado operacional</th>
+                <th>Resultado (operação)</th>
+                <th>Resultado (empresa)</th>
                 <th>Capital de giro</th>
                 <th>Anualizado</th>
             </tr>
@@ -116,7 +156,7 @@ $meiClass = match ($mei['level'] ?? 'ok') {
                     <td><?= money($row['gross_revenue'] ?? null) ?></td>
                     <td><?= money($row['variable_costs'] ?? null) ?></td>
                     <td><?= money($row['contribution_margin'] ?? null) ?></td>
-                    <td><?= money($row['fixed_costs'] ?? null) ?></td>
+                    <td><?= money($row['operating_result_operation'] ?? null) ?></td>
                     <td class="fw-semibold"><?= money($row['operating_result'] ?? null) ?></td>
                     <td><?= money($row['working_capital'] ?? null) ?></td>
                     <td><?= money($row['annualized_revenue'] ?? null) ?></td>

@@ -18,10 +18,11 @@ class CommercialIntelligenceController extends BaseController
         $rows = $this->service()->portfolio($this->auth()->id(), false);
 
         return view('profitability/commercial_index', [
-            'title'       => 'Inteligência comercial',
-            'rows'        => $rows,
-            'breadcrumbs' => ['Rentabilidade' => 'profitability', 'Inteligência comercial' => null],
-            'cepPending'  => true,
+            'title'              => 'Inteligência comercial',
+            'viabilityRows'      => $this->service()->rankByViability($rows),
+            'commercialRows'     => $this->service()->rankByCommercialPotential($rows),
+            'breadcrumbs'        => ['Rentabilidade' => 'profitability', 'Inteligência comercial' => null],
+            'cepPending'         => true,
         ]);
     }
 
@@ -76,8 +77,50 @@ class CommercialIntelligenceController extends BaseController
                 'Inteligência comercial' => 'profitability/commercial',
                 $data['product']['sku'] ?? 'Produto' => null,
             ],
-            'cepPending'  => empty($data['offer']['origin_postal_code'] ?? null),
+            'origin'      => ($origin = (new \App\Services\Logistics\ShippingOriginService())->resolve(
+                $data['product'] ?? [],
+                $data['offer'] ?? null,
+            )),
+            'skuOrigins'  => (new \App\Models\ShippingOriginModel())->forProduct($productId, false),
+            'sourceLabels'=> \App\Models\ShippingOriginModel::SOURCE_LABELS,
+            'cepPending'  => empty($origin['confirmed']),
         ]);
+    }
+
+    public function saveOrigin(int $productId): RedirectResponse
+    {
+        try {
+            $offer = (new \App\Models\SupplierOfferModel())
+                ->where('product_id', $productId)
+                ->orderBy('id', 'DESC')
+                ->first();
+            (new \App\Services\Logistics\ShippingOriginService())->create([
+                'product_id'    => $productId,
+                'supplier_id'   => $offer['supplier_id'] ?? null,
+                'label'         => (string) $this->request->getPost('label'),
+                'postal_code'   => (string) $this->request->getPost('postal_code'),
+                'city'          => $this->request->getPost('city'),
+                'uf'            => $this->request->getPost('uf'),
+                'source_type'   => (string) $this->request->getPost('source_type'),
+                'evidence_note' => $this->request->getPost('evidence_note'),
+                'evidence_url'  => $this->request->getPost('evidence_url'),
+                'confirmed'     => $this->request->getPost('confirmed') ? 1 : 0,
+            ], $this->auth()->id());
+        } catch (\App\Exceptions\ValidationException $e) {
+            $errors = $e->getErrors();
+
+            return redirect()->to('profitability/commercial/' . $productId)->with(
+                'error',
+                $errors !== [] ? implode(' ', $errors) : $e->getMessage(),
+            );
+        } catch (BusinessRuleException $e) {
+            return redirect()->to('profitability/commercial/' . $productId)->with('error', $e->getMessage());
+        }
+
+        return redirect()->to('profitability/commercial/' . $productId)->with(
+            'success',
+            'CEP de expedição do SKU registrado. Rentabilidade permanece indicativa até o frete final confirmado.',
+        );
     }
 
     public function refresh(int $productId): RedirectResponse
@@ -142,7 +185,7 @@ class CommercialIntelligenceController extends BaseController
                 $data['product']['sku'] ?? 'Produto' => 'profitability/commercial/' . $productId,
                 'Operação mensal' => null,
             ],
-            'cepPending'  => empty($data['offer']['origin_postal_code'] ?? null),
+            'cepPending'  => empty(($sim['origin']['confirmed'] ?? false)),
         ]);
     }
 
@@ -178,7 +221,7 @@ class CommercialIntelligenceController extends BaseController
                 $data['product']['sku'] ?? 'Produto' => 'profitability/commercial/' . $productId,
                 'Operação mensal' => null,
             ],
-            'cepPending'  => empty($data['offer']['origin_postal_code'] ?? null),
+            'cepPending'  => empty(($sim['origin']['confirmed'] ?? false)),
         ]);
     }
 

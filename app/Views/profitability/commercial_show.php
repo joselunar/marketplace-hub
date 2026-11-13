@@ -58,18 +58,37 @@ $relBadge = static function (?string $rel): string {
             <div class="card h-100">
                 <div class="card-body">
                     <div class="text-body-secondary small">Score comercial</div>
-                    <div class="display-6"><?= (int) ($score['total'] ?? 0) ?></div>
-                    <div class="small"><?= ! empty($score['proven_profit']) ? 'Lucro comprovado (parcial)' : 'Potencial comercial' ?></div>
+                    <div class="display-6"><?= (int) ($score['commercial_score'] ?? $score['total'] ?? 0) ?></div>
+                    <div class="small">potencial de mercado (não é lucro)</div>
                 </div>
             </div>
         </div>
-        <div class="col-md-9">
+        <div class="col-md-3">
             <div class="card h-100">
                 <div class="card-body">
-                    <div class="fw-semibold mb-1">Recomendação</div>
+                    <div class="text-body-secondary small">Viabilidade financeira</div>
+                    <div class="display-6"><?= (int) ($score['financial_score'] ?? 0) ?></div>
+                    <div class="small">margem <?= percent_format($score['financial_margin_pct'] ?? null, 2) ?>
+                        · indicativa <?= percent_format($score['indicative_margin_pct'] ?? null, 2) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="fw-semibold mb-1">Recomendação de venda</div>
                     <p class="mb-2"><?= esc($score['recommendation'] ?? '') ?></p>
                     <div class="small text-body-secondary">
-                        Confiabilidade dos dados:
+                        <?php if (! empty($score['proven_profit'])): ?>
+                            <span class="badge text-bg-success">rentabilidade comprovada</span>
+                        <?php elseif (! empty($score['indicative_rentable'])): ?>
+                            <span class="badge text-bg-primary">rentabilidade indicativa</span>
+                        <?php elseif (empty($score['financially_viable'])): ?>
+                            <span class="badge text-bg-danger">margem negativa</span>
+                        <?php else: ?>
+                            <span class="badge text-bg-secondary">potencial comercial</span>
+                        <?php endif ?>
+                        · confiabilidade
                         <span class="badge text-bg-<?= $relBadge($score['data_reliability'] ?? null) ?>"><?= esc($score['data_reliability'] ?? '—') ?></span>
                     </div>
                 </div>
@@ -77,6 +96,63 @@ $relBadge = static function (?string $rel): string {
         </div>
     </div>
 <?php endif ?>
+
+<div class="card mb-3">
+    <div class="card-header bg-white fw-semibold">CEP de expedição (SKU)</div>
+    <div class="card-body">
+        <?php $origin = $origin ?? []; ?>
+        <div class="small text-body-secondary mb-2">
+            Resolução atual: <?= esc($origin['note'] ?? '—') ?>
+            <?php if (! empty($origin['postal_code'])): ?>
+                · CEP <code><?= esc($origin['postal_code']) ?></code>
+                <?php if (! empty($origin['uf'])): ?>/<?= esc($origin['uf']) ?><?php endif ?>
+            <?php endif ?>
+        </div>
+        <?php if (! empty($skuOrigins)): ?>
+            <ul class="small mb-3">
+                <?php foreach ($skuOrigins as $row): ?>
+                    <li>
+                        <?= esc($row['label'] ?? '') ?> —
+                        <code><?= esc($row['postal_code'] ?? '') ?></code>
+                        · <?= esc($sourceLabels[$row['source_type'] ?? ''] ?? ($row['source_type'] ?? '')) ?>
+                        <?= ! empty($row['active']) ? '' : '(inativo)' ?>
+                    </li>
+                <?php endforeach ?>
+            </ul>
+        <?php endif ?>
+        <form method="post" action="<?= site_url('profitability/commercial/' . $pid . '/origin') ?>" class="row g-2 align-items-end">
+            <?= csrf_field() ?>
+            <div class="col-md-3">
+                <label class="form-label" for="label">Rótulo</label>
+                <input type="text" class="form-control form-control-sm" id="label" name="label" placeholder="CD / depósito SKU" maxlength="120">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label" for="postal_code">CEP *</label>
+                <input type="text" class="form-control form-control-sm" id="postal_code" name="postal_code" required maxlength="12" inputmode="numeric">
+            </div>
+            <div class="col-md-1">
+                <label class="form-label" for="uf">UF</label>
+                <input type="text" class="form-control form-control-sm" id="uf" name="uf" maxlength="2">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label" for="source_type">Origem da info *</label>
+                <select class="form-select form-select-sm" id="source_type" name="source_type" required>
+                    <?php foreach (($sourceLabels ?? []) as $value => $label): ?>
+                        <option value="<?= esc($value, 'attr') ?>" <?= $value === 'documental' ? 'selected' : '' ?>><?= esc($label) ?></option>
+                    <?php endforeach ?>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="evidence_note">Evidência / fonte</label>
+                <input type="text" class="form-control form-control-sm" id="evidence_note" name="evidence_note" maxlength="500" placeholder="E-mail Dropify, print, etc.">
+            </div>
+            <div class="col-md-1">
+                <button type="submit" class="btn btn-sm btn-outline-primary w-100">Salvar</button>
+            </div>
+        </form>
+        <div class="form-text mt-2">Também é possível cadastrar CEP por fornecedor/CD na ficha do fornecedor. Frete só deixa de ser indicativo após confirmação logística.</div>
+    </div>
+</div>
 
 <div class="card mb-3">
     <div class="card-header bg-white fw-semibold">Preços-alvo por margem (com re-cotação ML)</div>

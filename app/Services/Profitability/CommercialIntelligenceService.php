@@ -8,6 +8,7 @@ use App\Models\CompetitionObservationModel;
 use App\Models\ProductModel;
 use App\Models\ProfitabilityAnalysisModel;
 use App\Models\SupplierOfferModel;
+use App\Services\Logistics\ShippingOriginService;
 use App\Services\Marketplaces\MercadoLivre\MercadoLivreCompetitionService;
 use App\Services\Settings\SettingsService;
 use App\Services\Suppliers\DropifyImportService;
@@ -27,6 +28,8 @@ class CommercialIntelligenceService
         private readonly ?ProfitabilityCategoryService $categories = null,
         private readonly ?SettingsService $settings = null,
         private readonly ?ProfitabilityService $profitability = null,
+        private readonly ?ShippingOriginService $origins = null,
+        private readonly ?FixedCostsPlanner $fixedCosts = null,
     ) {
     }
 
@@ -81,13 +84,15 @@ class CommercialIntelligenceService
             throw new BusinessRuleException('Nenhuma conta Mercado Livre conectada.');
         }
 
+        $origin  = ($this->origins ?? new ShippingOriginService())->resolve($product, $offer);
         $context = $product + [
             'weight_grams'      => $offer['weight_grams'] ?? null,
             'height_cm'         => $offer['height_cm'] ?? $product['height'] ?? null,
             'width_cm'          => $offer['width_cm'] ?? $product['width'] ?? null,
             'length_cm'         => $offer['length_cm'] ?? $product['length'] ?? null,
-            'origin_uf'         => $offer['origin_uf'] ?? $product['origin_uf'] ?? null,
-            'origin_postal_code' => $offer['origin_postal_code'] ?? null,
+            'origin_uf'         => $origin['uf'] ?? ($offer['origin_uf'] ?? $product['origin_uf'] ?? null),
+            'origin_postal_code' => $origin['postal_code'] ?? ($offer['origin_postal_code'] ?? null),
+            'origin_resolution' => $origin,
             'marketplace_category_id' => $product['marketplace_category_id'] ?? ($analysis['marketplace_category_id'] ?? null),
             'marketplace_category_source' => $product['marketplace_category_source'] ?? ProfitabilityCategoryService::SOURCE_CONFIRMED,
         ];
@@ -246,9 +251,65 @@ class CommercialIntelligenceService
             ];
         }
 
+        foreach ($rows as &$row) {
+            $row['score'] = $this->decorateScore($row);
+            $row['origin'] = ($this->origins ?? new ShippingOriginService())->resolve(
+                $row['product'] ?? [],
+                $row['offer'] ?? null,
+            );
+        }
+        unset($row);
+
+        return $rows;
+    }
+
+    /**
+     * Ranking de recomendação de venda (viabilidade financeira).
+     * Margem negativa fica no fim — não mistura com potencial comercial.
+     *
+     * @param list<array<string, mixed>> $rows
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function rankByViability(array $rows): array
+    {
         usort($rows, static function (array $a, array $b): int {
-            $sa = (float) ($a['score']['total'] ?? -999);
-            $sb = (float) ($b['score']['total'] ?? -999);
+            $sa = $a['score'] ?? [];
+            $sb = $b['score'] ?? [];
+            $va = ! empty($sa['financially_viable']) ? 1 : 0;
+            $vb = ! empty($sb['financially_viable']) ? 1 : 0;
+            if ($va !== $vb) {
+                return $vb <=> $va;
+            }
+            $pa = ! empty($sa['proven_profit']) ? 1 : 0;
+            $pb = ! empty($sb['proven_profit']) ? 1 : 0;
+            if ($pa !== $pb) {
+                return $pb <=> $pa;
+            }
+            $ma = (float) ($sa['financial_margin_pct'] ?? -999);
+            $mb = (float) ($sb['financial_margin_pct'] ?? -999);
+            if ($ma !== $mb) {
+                return $mb <=> $ma;
+            }
+
+            return ((int) ($sb['financial_score'] ?? 0)) <=> ((int) ($sa['financial_score'] ?? 0));
+        });
+
+        return $rows;
+    }
+
+    /**
+     * Ranking de potencial comercial (mercado/estoque/logística), sem promover prejuízo.
+     *
+     * @param list<array<string, mixed>> $rows
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function rankByCommercialPotential(array $rows): array
+    {
+        usort($rows, static function (array $a, array $b): int {
+            $sa = (int) ($a['score']['commercial_score'] ?? $a['score']['total'] ?? 0);
+            $sb = (int) ($b['score']['commercial_score'] ?? $b['score']['total'] ?? 0);
 
             return $sb <=> $sa;
         });
@@ -288,16 +349,17 @@ class CommercialIntelligenceService
         $returns = Decimal::round(bcdiv(bcmul($price, $returnsPct, 4), '100', 4), 2);
         $ops = Decimal::round(bcadd(bcdiv(bcmul($price, $opsPct, 4), '100', 4), $opsFixed, 4), 2);
         $variable = Decimal::round(bcadd(bcadd(bcadd($cost, $fee, 2), $ship, 2), bcadd($returns, $ops, 2), 2), 2);
-        $fixed = $this->monthlyFixed();
+        $fixedPlan = ($this->fixedCosts ?? new FixedCostsPlanner($settings))->breakdown();
 
         $sim = $this->ops->simulate(
             $price,
             $variable,
-            $fixed,
+            $fixedPlan['company_total'],
             $cost,
             $volumes,
             (string) $settings->get('mei.annual_revenue_limit'),
             (string) $settings->get('mei.alert_percentage'),
+            $fixedPlan,
         );
 
         $sim['product'] = [
@@ -305,8 +367,9 @@ class CommercialIntelligenceService
             'sku'  => $data['product']['sku'] ?? null,
             'name' => $data['product']['name'] ?? null,
         ];
-        $sim['reliability_note'] = 'Frete e demais estimativas seguem a última análise; resultado operacional não é lucro comprovado.';
+        $sim['reliability_note'] = 'Frete e demais estimativas seguem a última análise; resultado operacional não é lucro comprovado enquanto o frete final não estiver confirmado.';
         $sim['stock'] = $offer['stock_quantity'] ?? null;
+        $sim['origin'] = ($this->origins ?? new ShippingOriginService())->resolve($data['product'] ?? [], $offer);
 
         return $sim;
     }
@@ -395,10 +458,39 @@ class CommercialIntelligenceService
      *
      * @return array<string, mixed>
      */
+    /**
+     * @param array<string, mixed> $row
+     *
+     * @return array<string, mixed>
+     */
+    private function decorateScore(array $row): array
+    {
+        $score = is_array($row['score'] ?? null) ? $row['score'] : [];
+        if (isset($score['commercial_score'], $score['financial_score'], $score['financial_margin_pct'])) {
+            return $score;
+        }
+
+        $targets = $row['targets'] ?? [];
+        $target20 = $this->findTarget(is_array($targets) ? $targets : [], '20.00');
+
+        return $this->score(
+            $row['product'] ?? [],
+            $row['offer'] ?? null,
+            $row['analysis'] ?? [],
+            is_array($targets) ? $targets : [],
+            is_array($row['competition'] ?? null) ? $row['competition'] : [],
+            $target20,
+        );
+    }
+
     private function score(array $product, ?array $offer, array $analysis, array $targets, array $competition, ?array $target20): array
     {
-        $indicative = (float) ($analysis['indicative_margin_pct'] ?? 0);
-        $marginPts = max(0, min(40, $indicative)); // 0–40
+        $indicativeSuggested = (float) ($analysis['indicative_margin_pct'] ?? 0);
+        $contributionPct = (float) ($analysis['contribution_margin_pct'] ?? 0);
+        $financialMarginPct = $indicativeSuggested;
+        if (is_array($target20) && isset($target20['indicative_margin_pct'])) {
+            $financialMarginPct = (float) $target20['indicative_margin_pct'];
+        }
 
         $median = $competition['stats']['median'] ?? null;
         $price20 = $target20['sale_price'] ?? null;
@@ -427,15 +519,18 @@ class CommercialIntelligenceService
         $stock = (int) ($offer['stock_quantity'] ?? 0);
         $stockPts = $stock >= 30 ? 10 : ($stock >= 10 ? 6 : ($stock > 0 ? 3 : 0));
 
-        $hasCep = ! empty($offer['origin_postal_code']);
-        $logisticsPts = $hasCep ? 10 : 3;
-        $logisticsLabel = $hasCep
-            ? 'CEP de origem do fornecedor disponível'
-            : 'CEP de expedição Dropify pendente — risco logístico';
+        $origin = ($this->origins ?? new ShippingOriginService())->resolve($product, $offer);
+        $hasCep = ! empty($origin['postal_code']);
+        $logisticsPts = $origin['confirmed'] ?? false ? 10 : ($hasCep ? 6 : 3);
+        $logisticsLabel = $origin['note'] ?? (
+            $hasCep
+                ? 'CEP de origem disponível'
+                : 'CEP de expedição Dropify pendente — risco logístico'
+        );
 
         $name = mb_strtolower((string) ($product['name'] ?? ''));
         $seasonal = (bool) preg_match('/natal|noel|halloween|páscoa|pascoa|dia das mães|black friday/i', $name);
-        $seasonPts = $seasonal ? 3 : 5; // sazonal = um pouco mais arriscado
+        $seasonPts = $seasonal ? 3 : 5;
 
         $feeOk = ($analysis['marketplace_fee_source'] ?? '') === 'confirmado';
         $shipRel = (string) ($analysis['seller_shipping_source'] ?? '');
@@ -444,46 +539,105 @@ class CommercialIntelligenceService
             ? 'confirmado'
             : (($feeOk || $shipRel === 'estimado') ? 'estimado' : 'desconhecido');
 
-        $total = (int) round($marginPts + $competitivePts + $capitalPts + $stockPts + $logisticsPts + $seasonPts + $reliabilityPts);
-        $proven = ($analysis['classification'] ?? '') === 'rentavel';
+        // Potencial comercial: NÃO usa margem (evita promover prejuízo).
+        $commercialScore = (int) round($competitivePts + $capitalPts + $stockPts + $logisticsPts + $seasonPts + $reliabilityPts);
+
+        // Viabilidade financeira: baseada na margem do preço-alvo 20% (ou indicativa atual).
+        $financialScore = 0;
+        if ($financialMarginPct >= 30) {
+            $financialScore = 40;
+        } elseif ($financialMarginPct >= 20) {
+            $financialScore = 32;
+        } elseif ($financialMarginPct >= 15) {
+            $financialScore = 24;
+        } elseif ($financialMarginPct >= 10) {
+            $financialScore = 16;
+        } elseif ($financialMarginPct >= 0) {
+            $financialScore = 8;
+        } else {
+            $financialScore = 0;
+        }
+
+        $shipConfirmed = $shipRel === 'confirmado';
+        $proven = ($analysis['classification'] ?? '') === 'rentavel' && $shipConfirmed && $feeOk;
+        $indicativeRentable = $financialMarginPct >= 10 && $feeOk;
+        $financiallyViable = $financialMarginPct >= 0;
+
+        $profitLabel = 'potencial_comercial';
+        if ($proven) {
+            $profitLabel = 'rentabilidade_comprovada';
+        } elseif ($indicativeRentable) {
+            $profitLabel = 'rentabilidade_indicativa';
+        } elseif (! $financiallyViable) {
+            $profitLabel = 'margem_negativa';
+        }
 
         return [
-            'total'            => $total,
-            'label'            => $proven ? 'lucro_comprovado_parcial' : 'potencial_comercial',
-            'proven_profit'    => $proven,
-            'data_reliability' => $dataReliability,
-            'breakdown'        => [
-                'margin'       => ['points' => round($marginPts, 1), 'value' => $indicative],
+            'total'                 => $commercialScore, // compat: score “comercial”
+            'commercial_score'      => $commercialScore,
+            'financial_score'       => $financialScore,
+            'financial_margin_pct'  => round($financialMarginPct, 2),
+            'indicative_margin_pct' => round($indicativeSuggested, 2),
+            'contribution_margin_pct' => round($contributionPct, 2),
+            'financially_viable'    => $financiallyViable,
+            'indicative_rentable'   => $indicativeRentable,
+            'label'                 => $profitLabel,
+            'proven_profit'         => $proven,
+            'data_reliability'      => $dataReliability,
+            'breakdown'             => [
                 'competitive'  => ['points' => $competitivePts, 'label' => $competitiveLabel, 'median' => $median, 'price_20' => $price20],
                 'capital'      => ['points' => $capitalPts, 'cost' => $cost],
                 'stock'        => ['points' => $stockPts, 'stock' => $stock],
                 'logistics'    => ['points' => $logisticsPts, 'label' => $logisticsLabel],
                 'seasonality'  => ['points' => $seasonPts, 'seasonal' => $seasonal],
                 'reliability'  => ['points' => $reliabilityPts, 'fee' => $analysis['marketplace_fee_source'] ?? null, 'shipping' => $shipRel],
+                'financial'    => [
+                    'points' => $financialScore,
+                    'margin_pct_for_viability' => round($financialMarginPct, 2),
+                    'suggested_indicative_pct' => round($indicativeSuggested, 2),
+                ],
             ],
-            'recommendation'   => $this->recommendation($total, $proven, $competitivePts, $indicative, $seasonal),
+            'recommendation'   => $this->recommendation(
+                $commercialScore,
+                $proven,
+                $indicativeRentable,
+                $financiallyViable,
+                $competitivePts,
+                $financialMarginPct,
+                $seasonal,
+            ),
         ];
     }
 
-    private function recommendation(int $total, bool $proven, int $competitivePts, float $indicative, bool $seasonal): string
-    {
+    private function recommendation(
+        int $commercialScore,
+        bool $proven,
+        bool $indicativeRentable,
+        bool $financiallyViable,
+        int $competitivePts,
+        float $financialMarginPct,
+        bool $seasonal,
+    ): string {
+        if (! $financiallyViable) {
+            return 'Não recomendado para venda no preço analisado: margem financeira negativa. O potencial comercial não sobrescreve prejuízo.';
+        }
         if ($proven) {
-            return 'Custos essenciais confirmados e classificação rentável — candidato a venda com bloqueios restantes do checklist.';
+            return 'Rentabilidade comprovada (custos essenciais confirmados) — candidato a venda com bloqueios restantes do checklist.';
         }
-        if ($total >= 70 && $competitivePts >= 15 && $indicative >= 15) {
-            return 'Alto potencial indicativo e preço-alvo competitivo — priorizar validação de CEP/frete real antes de contratar.';
+        if ($indicativeRentable && $competitivePts >= 15) {
+            return 'Rentabilidade indicativa positiva e preço-alvo competitivo — validar CEP/frete real antes de contratar.';
         }
-        if ($total >= 50 && $indicative >= 10) {
-            return 'Potencial moderado — útil para teste se frete real for menor que a estimativa atual.';
+        if ($indicativeRentable) {
+            return 'Rentabilidade indicativa (≥10%) — útil para teste após confirmar frete; potencial comercial separado.';
         }
-        if ($seasonal && $indicative > 0) {
-            return 'Item sazonal com margem apertada/indicativa — só faz sentido com janela de demanda clara.';
+        if ($seasonal && $financialMarginPct >= 0) {
+            return 'Item sazonal com margem apertada/indicativa — só com janela de demanda clara e frete confirmado.';
         }
-        if ($indicative < 0) {
-            return 'Indicativa negativa no preço sugerido Dropify — só reconsiderar com preço de anúncio bem acima e frete confirmado.';
+        if ($commercialScore >= 40 && $financialMarginPct >= 0) {
+            return 'Potencial comercial razoável, mas margem financeira frágil — não priorizar só pelo score comercial.';
         }
 
-        return 'Baixa prioridade comercial com os dados atuais.';
+        return 'Baixa prioridade de venda com os dados atuais.';
     }
 
     /**
@@ -499,26 +653,8 @@ class CommercialIntelligenceService
             'ops_fixed'     => $settings->get('profitability.variable_ops_fixed'),
             'tax_pct'       => $settings->get('profitability.tax_percentage'),
             'tax_approved'  => $settings->getBool('profitability.tax_approved'),
-            'fixed_monthly' => $this->monthlyFixed(),
+            'fixed_monthly' => ($this->fixedCosts ?? new FixedCostsPlanner($settings))->companyTotal(),
             'units'         => (int) $settings->get('fixed_costs.monthly_units_assumption'),
         ];
-    }
-
-    private function monthlyFixed(): string
-    {
-        $settings = $this->settings ?? service('settings');
-        $total = '0.00';
-        foreach ([
-            'fixed_costs.dropify_monthly',
-            'fixed_costs.vps_monthly',
-            'fixed_costs.fiscal_issuer_monthly',
-            'fixed_costs.certificate_a1_monthly',
-            'fixed_costs.das_mei_monthly',
-            'fixed_costs.other_monthly',
-        ] as $key) {
-            $total = bcadd($total, Decimal::round((string) $settings->get($key), 2), 2);
-        }
-
-        return Decimal::round($total, 2);
     }
 }

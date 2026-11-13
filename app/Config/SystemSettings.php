@@ -364,10 +364,10 @@ class SystemSettings extends BaseConfig
         'fixed_costs.das_mei_monthly' => [
             'group'   => 'fixed_costs',
             'type'    => 'decimal',
-            'label'   => 'DAS-MEI e outros fixos (R$/mês)',
-            'default' => '0.00',
+            'label'   => 'DAS-MEI (R$/mês)',
+            'default' => '80.00',
             'rules'   => 'required|decimal|greater_than_equal_to[0]|less_than[100000]',
-            'help'    => 'Confirme o valor atualizado com o contador.',
+            'help'    => 'Despesa fixa mensal do DAS-MEI. Editável; confirme o valor vigente com o contador. Entra no ponto de equilíbrio da operação (sem duplicar “outros fixos”).',
         ],
         'fixed_costs.other_monthly' => [
             'group'   => 'fixed_costs',

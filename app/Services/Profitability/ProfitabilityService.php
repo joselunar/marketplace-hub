@@ -65,13 +65,15 @@ class ProfitabilityService
             return $this->persist($product, $offer, $result, [], $userId, $source);
         }
 
+        $origin = (new \App\Services\Logistics\ShippingOriginService())->resolve($product, $offer);
         $context = $product + [
             'weight_grams'        => $offer['weight_grams'] ?? null,
             'height_cm'           => $offer['height_cm'] ?? $product['height'] ?? null,
             'width_cm'            => $offer['width_cm'] ?? $product['width'] ?? null,
             'length_cm'           => $offer['length_cm'] ?? $product['length'] ?? null,
-            'origin_uf'           => $offer['origin_uf'] ?? $product['origin_uf'] ?? null,
-            'origin_postal_code'   => $offer['origin_postal_code'] ?? null,
+            'origin_uf'           => $origin['uf'] ?? ($offer['origin_uf'] ?? $product['origin_uf'] ?? null),
+            'origin_postal_code'   => $origin['postal_code'] ?? ($offer['origin_postal_code'] ?? null),
+            'origin_resolution'   => $origin,
         ];
 
         $categoryService = new ProfitabilityCategoryService();
@@ -372,22 +374,8 @@ class ProfitabilityService
 
     private function monthlyFixedCosts(SettingsService $settings): string
     {
-        $total = '0.00';
-        foreach ([
-            'fixed_costs.dropify_monthly',
-            'fixed_costs.fiscal_issuer_monthly',
-            'fixed_costs.certificate_a1_monthly',
-            'fixed_costs.das_mei_monthly',
-            'fixed_costs.other_monthly',
-        ] as $key) {
-            $total = bcadd($total, Decimal::round((string) $settings->get($key), 2), 2);
-        }
-
-        // VPS compartilhada: entra no total da empresa; para rateio "dropshipping"
-        // ainda soma, mas o breakdown marca como compartilhada.
-        $total = bcadd($total, Decimal::round((string) $settings->get('fixed_costs.vps_monthly'), 2), 2);
-
-        return Decimal::round($total, 2);
+        // Total da empresa (operação + VPS), sem duplicar linhas.
+        return (new FixedCostsPlanner($settings))->companyTotal();
     }
 
     private function waitingResult(string $reason, string $cost, string $sale = '0.00'): ProfitabilityResult

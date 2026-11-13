@@ -6,7 +6,9 @@ use App\Enums\SupplierIntegrationType;
 use App\Enums\SupplierStatus;
 use App\Exceptions\BusinessRuleException;
 use App\Exceptions\ValidationException;
+use App\Models\ShippingOriginModel;
 use App\Models\SupplierModel;
+use App\Services\Logistics\ShippingOriginService;
 use App\Services\Suppliers\Connectors\SupplierConnectorFactory;
 use App\Services\Suppliers\Connectors\UnsupportedOperationException;
 use App\Services\Suppliers\SupplierService;
@@ -51,10 +53,58 @@ class SupplierController extends BaseController
             return redirect()->to('/suppliers')->with('error', $e->getMessage());
         }
 
+        $supplierId = (int) $details['supplier']['id'];
+
         return view('suppliers/show', $details + [
-            'title'       => $details['supplier']['name'],
-            'breadcrumbs' => ['Fornecedores' => 'suppliers', $details['supplier']['name'] => null],
+            'title'        => $details['supplier']['name'],
+            'origins'      => (new ShippingOriginModel())->forSupplier($supplierId, false),
+            'sourceLabels' => ShippingOriginModel::SOURCE_LABELS,
+            'breadcrumbs'  => ['Fornecedores' => 'suppliers', $details['supplier']['name'] => null],
         ]);
+    }
+
+    public function storeOrigin(int $id): RedirectResponse
+    {
+        try {
+            $this->service->findOrFail($id);
+            (new ShippingOriginService())->create([
+                'supplier_id'   => $id,
+                'label'         => (string) $this->request->getPost('label'),
+                'postal_code'   => (string) $this->request->getPost('postal_code'),
+                'city'          => $this->request->getPost('city'),
+                'uf'            => $this->request->getPost('uf'),
+                'source_type'   => (string) $this->request->getPost('source_type'),
+                'evidence_note' => $this->request->getPost('evidence_note'),
+                'evidence_url'  => $this->request->getPost('evidence_url'),
+                'confirmed'     => $this->request->getPost('confirmed') ? 1 : 0,
+            ], $this->auth()->id());
+        } catch (ValidationException $e) {
+            $errors = $e->getErrors();
+
+            return redirect()->to("/suppliers/{$id}")->with(
+                'error',
+                $errors !== [] ? implode(' ', $errors) : $e->getMessage(),
+            );
+        } catch (BusinessRuleException $e) {
+            return redirect()->to("/suppliers/{$id}")->with('error', $e->getMessage());
+        }
+
+        return redirect()->to("/suppliers/{$id}")->with(
+            'success',
+            'CEP/CD de expedição registrado. Frete continua estimativo até cotação com esse CEP confirmado.',
+        );
+    }
+
+    public function deactivateOrigin(int $id, int $originId): RedirectResponse
+    {
+        try {
+            $this->service->findOrFail($id);
+            (new ShippingOriginService())->deactivate($originId);
+        } catch (BusinessRuleException $e) {
+            return redirect()->to("/suppliers/{$id}")->with('error', $e->getMessage());
+        }
+
+        return redirect()->to("/suppliers/{$id}")->with('success', 'Origem de expedição desativada.');
     }
 
     public function new(): string

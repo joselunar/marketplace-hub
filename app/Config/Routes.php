@@ -24,6 +24,8 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
         $routes->get('(:num)', 'SupplierController::show/$1');
         $routes->get('(:num)/edit', 'SupplierController::edit/$1');
         $routes->post('(:num)', 'SupplierController::update/$1');
+        $routes->post('(:num)/origins', 'SupplierController::storeOrigin/$1');
+        $routes->post('(:num)/origins/(:num)/deactivate', 'SupplierController::deactivateOrigin/$1/$2');
         $routes->post('(:num)/test-connection', 'SupplierController::testConnection/$1');
         $routes->post('(:num)/delete', 'SupplierController::delete/$1', ['filter' => 'role:admin']);
     });
@@ -82,6 +84,7 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
         $routes->get('commercial/(:num)', 'CommercialIntelligenceController::show/$1');
         $routes->post('commercial/(:num)/refresh', 'CommercialIntelligenceController::refresh/$1');
         $routes->post('commercial/(:num)/competitor', 'CommercialIntelligenceController::addCompetitor/$1');
+        $routes->post('commercial/(:num)/origin', 'CommercialIntelligenceController::saveOrigin/$1');
         $routes->get('commercial/(:num)/ops', 'CommercialIntelligenceController::ops/$1');
         $routes->post('commercial/(:num)/ops', 'CommercialIntelligenceController::opsSimulate/$1');
         $routes->get('(:num)', 'ProfitabilityController::show/$1');

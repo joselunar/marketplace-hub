@@ -58,7 +58,8 @@ class Navigation extends BaseConfig
             'label' => 'Vendas',
             'items' => [
                 ['label' => 'Pedidos', 'icon' => 'cart-check', 'url' => 'orders', 'prefix' => 'orders'],
-                ['label' => 'Fiscal NF-e', 'icon' => 'receipt', 'url' => 'fiscal', 'prefix' => 'fiscal'],
+                ['label' => 'Fiscal NF-e', 'icon' => 'receipt', 'url' => 'fiscal', 'prefix' => 'fiscal', 'exclude' => 'fiscal/diagnostico,fiscal/company'],
+                ['label' => 'Diagnóstico fiscal', 'icon' => 'shield-check', 'url' => 'fiscal/diagnostico', 'prefix' => 'fiscal/diagnostico'],
             ],
         ],
         [

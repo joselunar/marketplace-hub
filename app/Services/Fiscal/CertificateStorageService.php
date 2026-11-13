@@ -5,6 +5,7 @@ namespace App\Services\Fiscal;
 use App\Exceptions\BusinessRuleException;
 use App\Exceptions\ValidationException;
 use App\Models\FiscalCertificateModel;
+use App\Models\FiscalCompanyModel;
 use App\Services\Security\TokenCipher;
 use CodeIgniter\HTTP\Files\UploadedFile;
 
@@ -16,6 +17,7 @@ class CertificateStorageService
 {
     public function __construct(
         private readonly FiscalCertificateModel $certificates = new FiscalCertificateModel(),
+        private readonly FiscalCompanyModel $companies = new FiscalCompanyModel(),
         private readonly ?TokenCipher $cipher = null,
     ) {
     }
@@ -36,17 +38,27 @@ class CertificateStorageService
             throw new ValidationException(['password' => 'Informe a senha do certificado.']);
         }
 
-        $dir = WRITEPATH . 'fiscal/certificates';
-        if (! is_dir($dir) && ! mkdir($dir, 0700, true) && ! is_dir($dir)) {
-            throw new BusinessRuleException('Não foi possível criar o diretório seguro do certificado.');
+        $company = $this->companies->find($companyId);
+        if ($company === null) {
+            throw new BusinessRuleException('Empresa fiscal não encontrada.');
         }
+
+        $dir = WRITEPATH . 'fiscal/certificates';
+        $this->ensurePrivateDir($dir);
 
         $name = 'company_' . $companyId . '_' . date('YmdHis') . '.' . $ext;
         $file->move($dir, $name, true);
         $path = $dir . DIRECTORY_SEPARATOR . $name;
+        @chmod($path, 0600);
 
-        $meta = $this->probe($path, $password);
+        try {
+            $meta = $this->probe($path, $password, (string) $company['document']);
+        } catch (\Throwable $e) {
+            @unlink($path);
+            throw $e;
+        }
 
+        $previous = $this->certificates->activeForCompany($companyId);
         $this->certificates->where('fiscal_company_id', $companyId)->set(['active' => 0])->update();
 
         $this->certificates->insert([
@@ -62,7 +74,19 @@ class CertificateStorageService
             'created_by'         => $userId,
         ]);
 
-        return $this->certificates->find($this->certificates->getInsertID());
+        // Remove arquivo anterior do disco somente após gravar o novo com sucesso.
+        if ($previous !== null && ! empty($previous['storage_path']) && is_file($previous['storage_path'])) {
+            $old = (string) $previous['storage_path'];
+            if ($old !== $path && str_starts_with($old, WRITEPATH . 'fiscal/certificates')) {
+                @unlink($old);
+            }
+        }
+
+        $row = $this->certificates->find($this->certificates->getInsertID());
+        // Resposta administrativa sem caminhos internos nem senha.
+        unset($row['password_encrypted'], $row['storage_path']);
+
+        return $row;
     }
 
     /**
@@ -91,32 +115,85 @@ class CertificateStorageService
     }
 
     /**
+     * Metadados públicos do A1 ativo (sem senha/caminho).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function publicMeta(int $companyId): ?array
+    {
+        $row = $this->certificates->activeForCompany($companyId);
+        if ($row === null) {
+            return null;
+        }
+
+        return [
+            'label'      => $row['label'] ?? 'A1',
+            'subject'    => $row['subject'] ?? null,
+            'valid_from' => $row['valid_from'] ?? null,
+            'valid_to'   => $row['valid_to'] ?? null,
+            'active'     => (int) ($row['active'] ?? 0) === 1,
+        ];
+    }
+
+    /**
      * @return array{subject: ?string, serial: ?string, valid_from: ?string, valid_to: ?string}
      */
-    private function probe(string $path, string $password): array
+    private function probe(string $path, string $password, string $companyDocument): array
     {
         if (! class_exists(\NFePHP\Common\Certificate::class)) {
-            return ['subject' => null, 'serial' => null, 'valid_from' => null, 'valid_to' => null];
+            throw new BusinessRuleException('Biblioteca NFePHP Common ausente para validar o certificado.');
+        }
+
+        $raw = file_get_contents($path);
+        if ($raw === false) {
+            throw new BusinessRuleException('Falha ao ler o arquivo do certificado.');
         }
 
         try {
-            $raw = file_get_contents($path);
-            if ($raw === false) {
-                throw new BusinessRuleException('Falha ao ler o arquivo do certificado.');
-            }
             $cert = \NFePHP\Common\Certificate::readPfx($raw, $password);
-
-            return [
-                'subject'    => method_exists($cert, 'getCompanyName') ? (string) $cert->getCompanyName() : null,
-                'serial'     => null,
-                'valid_from' => null,
-                'valid_to'   => method_exists($cert, 'getValidTo') && $cert->getValidTo() instanceof \DateTimeInterface
-                    ? $cert->getValidTo()->format('Y-m-d H:i:s')
-                    : null,
-            ];
         } catch (\Throwable $e) {
-            @unlink($path);
-            throw new ValidationException(['certificate' => 'Certificado ou senha inválidos: ' . $e->getMessage()]);
+            throw new ValidationException(['certificate' => 'Certificado ou senha inválidos.']);
+        }
+
+        if (method_exists($cert, 'isExpired') && $cert->isExpired()) {
+            throw new ValidationException(['certificate' => 'O certificado A1 está vencido.']);
+        }
+
+        $companyDoc = preg_replace('/\D+/', '', $companyDocument) ?? '';
+        $certCnpj = method_exists($cert, 'getCnpj') ? preg_replace('/\D+/', '', (string) $cert->getCnpj()) : '';
+        $certCpf  = method_exists($cert, 'getCpf') ? preg_replace('/\D+/', '', (string) $cert->getCpf()) : '';
+        $certDoc  = $certCnpj !== '' ? $certCnpj : $certCpf;
+
+        if ($companyDoc !== '' && $certDoc !== '' && $companyDoc !== $certDoc) {
+            throw new ValidationException([
+                'certificate' => 'O CNPJ/CPF do certificado não confere com o documento cadastrado na empresa fiscal.',
+            ]);
+        }
+
+        $validFrom = method_exists($cert, 'getValidFrom') && $cert->getValidFrom() instanceof \DateTimeInterface
+            ? $cert->getValidFrom()->format('Y-m-d H:i:s')
+            : null;
+        $validTo = method_exists($cert, 'getValidTo') && $cert->getValidTo() instanceof \DateTimeInterface
+            ? $cert->getValidTo()->format('Y-m-d H:i:s')
+            : null;
+
+        return [
+            'subject'    => method_exists($cert, 'getCompanyName') ? (string) $cert->getCompanyName() : null,
+            'serial'     => $certDoc !== '' ? $certDoc : null,
+            'valid_from' => $validFrom,
+            'valid_to'   => $validTo,
+        ];
+    }
+
+    private function ensurePrivateDir(string $dir): void
+    {
+        if (! is_dir($dir) && ! mkdir($dir, 0700, true) && ! is_dir($dir)) {
+            throw new BusinessRuleException('Não foi possível criar o diretório seguro do certificado.');
+        }
+        @chmod($dir, 0700);
+        $index = $dir . DIRECTORY_SEPARATOR . 'index.html';
+        if (! is_file($index)) {
+            @file_put_contents($index, "<!DOCTYPE html><title>403</title><p>Forbidden</p>\n");
         }
     }
 

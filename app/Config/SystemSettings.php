@@ -468,5 +468,21 @@ class SystemSettings extends BaseConfig
             'rules'   => 'required|is_natural_no_zero|less_than_equal_to[999999999]',
             'help'    => 'Incrementado automaticamente a cada transmissão em homologação.',
         ],
+        'fiscal.accreditation_declared' => [
+            'group'   => 'fiscal',
+            'type'    => 'bool',
+            'label'   => 'Declaro credenciamento estadual NF-e (informativo)',
+            'default' => false,
+            'rules'   => 'permit_empty|in_list[0,1]',
+            'help'    => 'Marque apenas se a empresa já solicitou/obteve credenciamento. Isto NÃO consulta a SEFAZ e não comprova autorização.',
+        ],
+        'fiscal.accreditation_note' => [
+            'group'   => 'fiscal',
+            'type'    => 'string',
+            'label'   => 'Observação de credenciamento (opcional)',
+            'default' => '',
+            'rules'   => 'permit_empty|max_length[255]',
+            'help'    => 'Protocolo, data do pedido ou contato com a SEFAZ/contabilidade. Sem dados sensíveis.',
+        ],
     ];
 }

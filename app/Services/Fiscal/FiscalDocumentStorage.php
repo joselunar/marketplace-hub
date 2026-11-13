@@ -6,8 +6,30 @@ use App\Exceptions\BusinessRuleException;
 
 class FiscalDocumentStorage
 {
+    public function ensureBaseDirectories(): void
+    {
+        foreach ([
+            WRITEPATH . 'fiscal',
+            WRITEPATH . 'fiscal/certificates',
+            WRITEPATH . 'fiscal/xml',
+            WRITEPATH . 'fiscal/xml/signed',
+            WRITEPATH . 'fiscal/xml/authorized',
+            WRITEPATH . 'fiscal/danfe',
+        ] as $dir) {
+            if (! is_dir($dir) && ! mkdir($dir, 0700, true) && ! is_dir($dir)) {
+                throw new BusinessRuleException('Não foi possível preparar o armazenamento fiscal.');
+            }
+            @chmod($dir, 0700);
+            $index = $dir . DIRECTORY_SEPARATOR . 'index.html';
+            if (! is_file($index)) {
+                @file_put_contents($index, "<!DOCTYPE html><title>403</title><p>Forbidden</p>\n");
+            }
+        }
+    }
+
     public function storeXml(string $accessKeyOrId, string $xml, string $kind): string
     {
+        $this->ensureBaseDirectories();
         $dir = WRITEPATH . 'fiscal/xml/' . $kind;
         if (! is_dir($dir) && ! mkdir($dir, 0700, true) && ! is_dir($dir)) {
             throw new BusinessRuleException('Não foi possível criar o diretório de XML fiscal.');
@@ -23,6 +45,7 @@ class FiscalDocumentStorage
 
     public function storeDanfe(string $accessKeyOrId, string $pdfBinary): string
     {
+        $this->ensureBaseDirectories();
         $dir = WRITEPATH . 'fiscal/danfe';
         if (! is_dir($dir) && ! mkdir($dir, 0700, true) && ! is_dir($dir)) {
             throw new BusinessRuleException('Não foi possível criar o diretório de DANFE.');

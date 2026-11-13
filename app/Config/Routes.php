@@ -62,6 +62,8 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
 
     $routes->group('fiscal', static function (RouteCollection $routes): void {
         $routes->get('/', 'FiscalController::index');
+        $routes->get('diagnostico', 'FiscalController::diagnostico');
+        $routes->post('diagnostico/locks', 'FiscalController::enforceLocks');
         $routes->get('company', 'FiscalController::company');
         $routes->post('company', 'FiscalController::saveCompany');
         $routes->post('company/tax', 'FiscalController::saveTaxParams');

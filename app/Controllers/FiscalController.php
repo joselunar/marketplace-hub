@@ -9,8 +9,10 @@ use App\Models\FiscalInvoiceEventModel;
 use App\Models\FiscalInvoiceModel;
 use App\Services\Fiscal\CertificateStorageService;
 use App\Services\Fiscal\FiscalCompanyService;
+use App\Services\Fiscal\FiscalDiagnosticService;
 use App\Services\Fiscal\FiscalDocumentStorage;
 use App\Services\Fiscal\FiscalGate;
+use App\Services\Fiscal\FiscalSafetyService;
 use App\Services\Fiscal\MercadoLivreFiscalDocumentService;
 use App\Services\Fiscal\NfeEmissionService;
 use CodeIgniter\HTTP\RedirectResponse;
@@ -62,6 +64,39 @@ class FiscalController extends BaseController
             'gate'        => new FiscalGate(),
             'breadcrumbs' => ['Vendas' => null, 'Fiscal NF-e' => site_url('fiscal'), 'Detalhe' => null],
         ]);
+    }
+
+    public function diagnostico(): string|RedirectResponse
+    {
+        $gate = new FiscalGate();
+        if (! $gate->moduleEnabled()) {
+            return redirect()->to('settings')->with(
+                'error',
+                'Módulo fiscal desativado. Ative em Configurações → Fiscal (sem liberar emissão real).'
+            );
+        }
+
+        // Nesta fase, reafirma bloqueio de emissão real / envio ML ao abrir o diagnóstico.
+        $forced = (new FiscalSafetyService())->enforceHomologationLocks($this->auth()->id());
+        $report = (new FiscalDiagnosticService())->run();
+
+        return view('fiscal/diagnostico', [
+            'title'       => 'Diagnóstico fiscal',
+            'report'      => $report,
+            'forced'      => $forced,
+            'gate'        => $gate,
+            'breadcrumbs' => ['Vendas' => null, 'Fiscal NF-e' => site_url('fiscal'), 'Diagnóstico' => null],
+        ]);
+    }
+
+    public function enforceLocks(): RedirectResponse
+    {
+        $forced = (new FiscalSafetyService())->enforceHomologationLocks($this->auth()->id());
+        $msg = $forced === []
+            ? 'Emissão real e envio ao Mercado Livre já estavam desligados.'
+            : 'Flags reforçadas: ' . implode(', ', $forced);
+
+        return redirect()->to('fiscal/diagnostico')->with('success', $msg);
     }
 
     public function company(): string

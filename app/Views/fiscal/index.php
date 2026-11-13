@@ -20,6 +20,7 @@ $gate   = $gate ?? null;
         </div>
     </div>
     <div class="d-flex flex-wrap gap-2">
+        <a href="<?= site_url('fiscal/diagnostico') ?>" class="btn btn-sm btn-outline-dark"><i class="bi bi-shield-check me-1"></i>Diagnóstico</a>
         <a href="<?= site_url('fiscal/company') ?>" class="btn btn-sm btn-outline-secondary"><i class="bi bi-building me-1"></i>Empresa e certificado</a>
         <form method="post" action="<?= site_url('fiscal/status-servico') ?>"><?= csrf_field() ?>
             <button class="btn btn-sm btn-outline-primary" type="submit"><i class="bi bi-hdd-network me-1"></i>Status SEFAZ</button>

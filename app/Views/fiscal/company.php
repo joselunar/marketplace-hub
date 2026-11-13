@@ -179,8 +179,11 @@ $certificate = $certificate ?? null;
                     <input name="label" class="form-control" value="A1">
                 </div>
                 <div class="col-12">
-                    <button class="btn btn-outline-primary" type="submit">Armazenar certificado</button>
-                    <div class="form-text">Arquivo fora do webroot; senha cifrada. Nunca exibida depois do envio.</div>
+                    <button class="btn btn-outline-primary" type="submit">Armazenar / substituir certificado</button>
+                    <div class="form-text">
+                        Arquivo em armazenamento privado; senha cifrada; CNPJ/CPF deve conferir com a empresa; validade verificada.
+                        Não envie o PFX por chat ou e-mail. A substituição desativa o A1 anterior.
+                    </div>
                 </div>
             </form>
         <?php endif ?>

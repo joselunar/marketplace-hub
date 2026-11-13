@@ -33,6 +33,8 @@ O Venus (`sistema_asaas` + `venus_vendor`) já emite NF-e com **NFePHP** (`nfeph
 ## Requisitos VPS
 
 - PHP 8.2+ com extensões: `soap`, `openssl`, `dom`, `simplexml`, `json`, `zlib`, `libxml`.
+- O `composer.json` declara `config.platform.ext-soap` para o `composer install` do deploy não falhar se a extensão ainda estiver desligada no CLI; **comunicação real com a SEFAZ exige `php-soap` habilitado** (selecionar no painel Hostinger / instalar o pacote PHP).
+- Após o deploy: `php spark migrate` e `php spark db:seed SettingsSeeder` (backup automático já ocorre no script de deploy).
 - Certificado A1 da empresa e credenciamento estadual para NF-e.
 - Regras tributárias (CFOP, CSOSN, CRT, NCM, venda à ordem / dropshipping) validadas pelo contador.
 

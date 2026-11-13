@@ -35,7 +35,10 @@
     "config": {
         "optimize-autoloader": true,
         "preferred-install": "dist",
-        "sort-packages": true
+        "sort-packages": true,
+        "platform": {
+            "ext-soap": "8.2.0"
+        }
     },
     "scripts": {
         "test": "phpunit",
